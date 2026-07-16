@@ -1,40 +1,68 @@
-# Avellaneda-Stoikov Market Maker Bot
+# บอทเทรด Market Maker ด้วย Avellaneda-Stoikov
 
-A market-making trading bot for OKX using the **Avellaneda-Stoikov** pricing framework, built on **Lumibot** with **CCXT/CCXT Pro** connectivity.
+บอทเทรดแบบ Market Maker สำหรับ OKX โดยใช้โมเดลการตั้งราคาแบบ **Avellaneda-Stoikov** พัฒนาต่อยอดบน **Lumibot** และใช้ **CCXT/CCXT Pro** ในการเชื่อมต่อกับกระดานเทรด
 
-## Features
+## ฟีเจอร์หลัก
 
-- **Dual strategy modes**: Avellaneda-Stoikov optimal quoting and volatility-based fallback
-- **Real-time WebSocket data**: CCXT Pro order book streaming with automatic REST fallback
-- **Inventory management**: Reservation price skewing, size reduction, hard limits
-- **Order book imbalance skewing**: Asymmetric quote adjustment based on book pressure
-- **Risk management**: Drawdown kill-switch, liquidation distance monitoring, rate limiting
-- **Fill detection**: REST polling with VWAP tracking and proper P&L attribution
-- **Regime detection**: EMA crossover, RSI, and price slope for trend/range classification
-- **Live dashboard**: Rich terminal UI with market data, P&L, orders, fills, and risk metrics
-- **Crash recovery**: JSON state persistence for clean restarts
+- **โหมดกลยุทธ์ 2 แบบ**: แบบตั้งราคาตาม Avellaneda-Stoikov (Optimal Quoting) และโหมดสำรองตามความผันผวน (Volatility-based fallback)
+- **ข้อมูลแบบ Real-time**: รับข้อมูล Order Book ผ่าน WebSocket ของ CCXT Pro พร้อมระบบสลับไปใช้ REST อัตโนมัติเมื่อข้อมูลขัดข้อง
+- **การจัดการสต็อก (Inventory)**: การปรับราคา Reservation Price ตามสถานะพอร์ต, การลดขนาดไม้เทรด, และการจำกัดขนาดโพสิชันสูงสุด
+- **การปรับสมดุลจาก Order Book (Imbalance Skewing)**: ปรับราคาเสนอซื้อ/ขายแบบไม่สมมาตร (Asymmetric) ตามแรงกดดันในตลาด
+- **การจัดการความเสี่ยง (Risk Management)**: ระบบตัดการทำงาน (Kill-switch) เมื่อขาดทุนเกินกำหนด (Drawdown), ตรวจสอบระยะห่างจากราคา Liquidate, และการจำกัดความถี่ในการส่งคำสั่ง
+- **การตรวจจับการจับคู่คำสั่ง (Fill Detection)**: ตรวจสอบแบบ Polling ด้วย REST API พร้อมติดตามราคา VWAP และการบันทึกกำไร/ขาดทุนอย่างถูกต้อง
+- **การตรวจจับสภาวะตลาด (Regime Detection)**: ใช้จุดตัด EMA, RSI, และความชันของราคาเพื่อจำแนกสภาวะตลาดแบบมีเทรนด์ (Trend) หรือแบบแกว่งตัว (Range)
+- **Dashboard แสดงผลแบบสด**: แสดงข้อมูลบนเว็บเพจที่ทำงานที่ Localhost (ปรับปรุงจาก Terminal UI เดิม) พร้อมข้อมูลตลาด, P&L, ออเดอร์, Fills, และค่าความเสี่ยงต่างๆ
+- **การกู้คืนระบบ (Crash Recovery)**: บันทึกสถานะลงไฟล์ JSON อย่างต่อเนื่องเพื่อการรีสตาร์ทบอทอย่างปลอดภัย
 
-## Quick Start
+## การทำงานของบอท (Trading Logic) แบบละเอียด
 
-### 1. Install dependencies
+กลไกหลักของบอทถูกควบคุมโดย `strategy.py` ซึ่งจะทำงานเป็นรอบๆ ตามค่า `sleeptime` (เช่น ทุกๆ 0.5 วินาที) โดยในแต่ละรอบจะมีขั้นตอนการทำงาน (Logic) ดังนี้:
+
+1. **ดึงข้อมูลตลาด (Refresh Market State)**: 
+   - ดึงข้อมูล Order Book ล่าสุดจาก WebSocket 
+   - หาก WebSocket ขาดการเชื่อมต่อหรือข้อมูลไม่อัปเดต บอทจะสลับไปดึงข้อมูลผ่าน REST API แทนอัตโนมัติ เพื่อให้ได้ราคา Mid-price และข้อมูล Spread ที่ถูกต้องเสมอ
+2. **ตรวจจับสภาวะตลาด (Regime Detection)**: 
+   - นำประวัติราคามาคำนวณและจำแนกสภาวะตลาดปัจจุบัน ว่าเป็นแบบ "เทรนด์ (Trend)" หรือ "แกว่งตัว (Range)" เพื่อนำไปปรับพฤติกรรมการตั้งราคา
+3. **ตรวจสอบการทำงานของออเดอร์ (Fill Detection)**: 
+   - ตรวจสอบว่ามีออเดอร์ไหนถูกจับคู่ (Matched/Filled) ไปแล้วบ้าง และอัปเดตจำนวนเหรียญในพอร์ต (Inventory) รวมถึงราคาเฉลี่ยที่เข้าซื้อ (Average Entry Price)
+4. **อัปเดตผลกำไร/ขาดทุน (P&L Update)**: 
+   - คำนวณกำไร/ขาดทุนที่ยังไม่เกิดขึ้นจริง (Unrealized PNL) ตามราคาตลาดล่าสุด และนำไปรวมกับกำไร/ขาดทุนที่เกิดขึ้นแล้ว (Realized PNL) จากขั้นตอนก่อนหน้า
+5. **ตรวจสอบความเสี่ยง (Risk Checks)**: 
+   - หากขาดทุนรวม (Drawdown) ถึงจุดวิกฤต หรือเข้าใกล้ราคา Liquidation บอทจะเข้าโหมด Kill-switch โดยจะยกเลิกออเดอร์ทั้งหมดทันที และหยุดส่งคำสั่งใหม่
+6. **สร้างคำสั่งเสนอซื้อ/ขาย (Quote Generation)**: 
+   - **Avellaneda-Stoikov (หลัก):** คำนวณราคา Reservation Price (ราคาที่บอทรู้สึกปลอดภัย) โดยพิจารณาจาก Inventory ปัจจุบัน และคำนวณระยะ Spread ที่เหมาะสมที่สุด (Optimal Spread) ตามค่าความผันผวนของตลาด
+   - ปรับแต่งราคาเพิ่มเติมจากความไม่สมดุลของ Order book (Imbalance Skewing)
+   - ปรับ Spread และขนาดออเดอร์ตามสภาวะตลาด (เช่น ตลาดมีเทรนด์แรงๆ อาจจะถ่าง Spread ให้กว้างขึ้น และลดขนาดออเดอร์ลง)
+7. **จัดการและอัปเดตออเดอร์ (Order Reconciliation)**: 
+   - เทียบออเดอร์ที่ควรจะเป็น (จากข้อ 6) กับออเดอร์ที่เปิดอยู่จริงบนกระดานเทรด หากราคาหรือขนาดเปลี่ยนไปจากเดิมเกินเกณฑ์ที่ตั้งไว้ บอทจะทำการแก้ไข (Amend) หรือยกเลิกแล้วตั้งใหม่ (Cancel & Replace)
+8. **จัดการออเดอร์ที่ค้างและไม่ได้ใช้งาน (Cleanup)**: 
+   - เคลียร์ออเดอร์ที่ถูกปิดไปแล้วออกจากระบบความจำ
+9. **บันทึกสถานะ (State Persistence)**: 
+   - เซฟข้อมูล Inventory, P&L, และออเดอร์ลงไฟล์ `bot_state.json` เป็นระยะๆ เพื่อป้องกันข้อมูลหายหากโปรแกรมดับ
+10. **อัปเดตหน้าจอ (Dashboard Update)**: 
+    - ส่งข้อมูลสเตตัสล่าสุดทั้งหมดไปที่ In-memory state เพื่อให้ Web Server นำไปแสดงผลบน Browser (หน้าต่าง Dashboard ที่แยกออกมา) แบบสดๆ
+
+## เริ่มต้นใช้งาน
+
+### 1. ติดตั้ง Dependencies
 
 ```bash
-python -m venv venv
+python -m venv myenv
 # Windows:
-venv\Scripts\activate
+.\myenv\Scripts\activate
 # macOS/Linux:
-source venv/bin/activate
+source myenv/bin/activate
 
 pip install -r requirements.txt
 ```
 
-### 2. Configure credentials
+### 2. ตั้งค่า API Key
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your OKX API credentials:
+แก้ไขไฟล์ `.env` ด้วยข้อมูล API จาก OKX:
 
 ```env
 OKX_API_KEY=your_api_key_here
@@ -43,66 +71,37 @@ OKX_PASSPHRASE=your_passphrase_here
 OKX_SANDBOX=true
 ```
 
-> **⚠️ Start with sandbox mode (`OKX_SANDBOX=true`)** to test before using real funds.
+> **⚠️ แนะนำให้เริ่มต้นด้วยโหมด Sandbox (`OKX_SANDBOX=true`)** เพื่อทดสอบระบบก่อนใช้เงินจริง
 
-### 3. Run the bot
+### 3. รันบอท
 
 ```bash
 python main.py
 ```
+*(เมื่อรันบอท หน้าจอ Dashboard จะถูกเปิดขึ้นมาบน Browser อัตโนมัติที่ `http://127.0.0.1:8765`)*
 
-## Architecture
+## การตั้งค่า (Configuration)
 
-```
-main.py                  Entry point — broker + strategy + trader
-├── config.py            Configuration dataclass + env loading
-├── strategy.py          Lumibot Strategy subclass — main orchestrator
-│   ├── market_state.py  Order book data, EMA, volatility, imbalance
-│   ├── quote_engine.py  A-S and volatility quote generation + skewing
-│   ├── risk_manager.py  Kill-switch, drawdown, liquidation checks
-│   ├── order_manager.py Order lifecycle, rate limiting, reconciliation
-│   ├── fill_tracker.py  Fill detection, VWAP, P&L attribution
-│   ├── regime_detector.py  Trend/range classification
-│   ├── dashboard.py     Rich terminal live dashboard
-│   ├── state_persistence.py  JSON state save/load
-│   └── utils.py         Tick rounding, min notional, helpers
-```
+พารามิเตอร์ทั้งหมดสามารถตั้งค่าได้ที่ไฟล์ `config.py` ค่าที่สำคัญมีดังนี้:
 
-## Configuration
-
-All parameters are in `config.py`. Key settings:
-
-| Parameter | Default | Description |
+| พารามิเตอร์ | ค่าเริ่มต้น | คำอธิบาย |
 |---|---|---|
-| `strategy_mode` | `"avellaneda"` | `"avellaneda"` or `"volatility"` |
-| `gamma` | `0.1` | Risk aversion (higher → wider spreads) |
-| `k` | `1.5` | Order book liquidity parameter |
-| `max_inventory` | `0.01` | Max position size (base currency) |
-| `max_drawdown_pct` | `0.05` | Kill-switch threshold (5%) |
-| `leverage` | `1.0` | Leverage multiplier |
-| `sleeptime` | `0.5` | Seconds between iterations |
+| `strategy_mode` | `"avellaneda"` | `"avellaneda"` หรือ `"volatility"` |
+| `gamma` | `0.1` | ระดับการหลีกเลี่ยงความเสี่ยง (ค่ายิ่งสูง → Spread ยิ่งกว้าง) |
+| `k` | `1.5` | พารามิเตอร์สภาพคล่องของ Order book |
+| `max_inventory` | `0.01` | ขนาด Position สูงสุด (สกุลเงิน Base) |
+| `max_drawdown_pct` | `0.05` | จุดตัดการทำงาน (Kill-switch) เมื่อขาดทุน 5% |
+| `leverage` | `1.0` | ตัวคูณ Leverage |
+| `sleeptime` | `0.5` | เวลาหน่วงระหว่างแต่ละรอบการทำงาน (วินาที) |
 
-## Trading Loop
+## ความปลอดภัย
 
-Each iteration follows this sequence:
+- **Kill-switch**: จะหยุดการส่งคำสั่งตั้งราคาทั้งหมด เมื่อ Drawdown สูงเกินเกณฑ์ที่ตั้งไว้
+- บอทจะทำการยกเลิกออเดอร์ทั้งหมดก่อนที่ระบบจะปิดตัวลง (ไม่ว่าจะปิดปกติ หรือโปรแกรม Crash)
+- สถานะต่างๆ จะถูกบันทึกไว้อย่างต่อเนื่อง เพื่อให้สามารถกู้คืนระบบได้หลังการ Crash
+- มีระบบจำกัดการส่งคำสั่ง (Rate limiting) เพื่อป้องกันไม่ให้ถูกแบนจากกระดานเทรด
+- บอทจะไม่ส่งคำสั่งที่มีราคาหรือขนาดที่ไม่ถูกต้องตามขั้นต่ำของตลาด (Tick/Lot size)
 
-1. **Market data** — read WebSocket order book (REST fallback if stale)
-2. **Regime detection** — classify as trend or range
-3. **Fill detection** — check for new fills, update P&L
-4. **Risk checks** — drawdown, liquidation, inventory limits
-5. **Quote generation** — A-S or volatility model with skewing
-6. **Order reconciliation** — place/amend/cancel as needed
-7. **State persistence** — periodic JSON save
-8. **Dashboard update** — refresh terminal display
+## ข้อจำกัดความรับผิดชอบ (Disclaimer)
 
-## Safety
-
-- Kill-switch halts all quoting when drawdown exceeds the threshold
-- All orders are cancelled on shutdown (graceful or crash)
-- State is persisted for crash recovery
-- Rate limiting prevents exchange ban
-- Never submit unrounded prices or sub-minimum orders
-
-## Disclaimer
-
-This bot is provided for educational and research purposes. Trading cryptocurrency carries significant risk. Always start with sandbox/demo mode and never risk more than you can afford to lose.
+บอทเทรดนี้สร้างขึ้นเพื่อวัตถุประสงค์ในการศึกษาและการวิจัยเท่านั้น การซื้อขายคริปโตเคอร์เรนซีมีความเสี่ยงสูงมาก โปรดเริ่มต้นด้วยโหมด Sandbox/Demo เสมอ และอย่าเสี่ยงด้วยเงินที่คุณไม่สามารถสูญเสียได้

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A-S Market Maker — Dashboard</title>
+  <meta name="description" content="Live dashboard for the Avellaneda-Stoikov Market Maker bot running on OKX." />
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --bg2:      #161b22;
+      --bg3:      #21262d;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --dim:      #8b949e;
+      --green:    #3fb950;
+      --red:      #f85149;
+      --yellow:   #d29922;
+      --blue:     #388bfd;
+      --purple:   #bc8cff;
+      --cyan:     #39c5cf;
+      --mono:     'JetBrains Mono', 'Fira Mono', 'Cascadia Code', ui-monospace, monospace;
+      --sans:     'Inter', system-ui, sans-serif;
+      --radius:   6px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* ── Layout ───────────────────────────────────────────────────── */
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      grid-template-columns: 1fr;
+      min-height: 100vh;
+      gap: 0;
+    }
+
+    #app {
+      display: grid;
+      grid-template-rows: auto 1fr 200px;
+      min-height: 100vh;
+      padding: 10px;
+      gap: 8px;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    #header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 14px;
+      flex-wrap: wrap;
+    }
+
+    #header .brand {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--cyan);
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }
+
+    .sep { color: var(--border); font-weight: 300; }
+
+    .hitem { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .hlabel { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .hval { font-family: var(--mono); font-size: 13px; }
+
+    #regime-badge {
+      padding: 2px 10px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    #regime-badge.trend  { background: rgba(248,81,73,.2); color: var(--red); border: 1px solid var(--red); }
+    #regime-badge.range  { background: rgba(63,185,80,.2); color: var(--green); border: 1px solid var(--green); }
+    #regime-badge.unknown { background: rgba(139,148,158,.2); color: var(--dim); border: 1px solid var(--border); }
+
+    #conn-badge {
+      margin-left: auto;
+      padding: 2px 10px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+    }
+    #conn-badge.live { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid var(--green); }
+    #conn-badge.disc { background: rgba(248,81,73,.15); color: var(--red); border: 1px solid var(--red); animation: pulse 1.5s ease-in-out infinite; }
+
+    /* ── Main grid ────────────────────────────────────────────────── */
+    #main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 8px;
+      min-height: 0;
+    }
+
+    /* ── Panel base ───────────────────────────────────────────────── */
+    .panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .panel-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dim);
+      padding: 6px 10px 5px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg3);
+      flex-shrink: 0;
+    }
+
+    .panel-body {
+      padding: 8px 10px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* ── KV grid ──────────────────────────────────────────────────── */
+    .kv-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 2px 12px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .kv-label { color: var(--dim); white-space: nowrap; }
+    .kv-val   { text-align: right; white-space: nowrap; }
+
+    /* ── Sparkline ────────────────────────────────────────────────── */
+    #sparkline-wrap {
+      margin: 8px 0 4px;
+      height: 44px;
+    }
+    #sparkline {
+      width: 100%;
+      height: 44px;
+      display: block;
+    }
+
+    /* ── Status pill ──────────────────────────────────────────────── */
+    .pill {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 100px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+    .pill-live  { background: rgba(63,185,80,.2);  color: var(--green); }
+    .pill-stale { background: rgba(248,81,73,.2);  color: var(--red);   }
+
+    /* ── Progress bar ─────────────────────────────────────────────── */
+    .bar-wrap {
+      background: var(--bg3);
+      border-radius: 100px;
+      height: 6px;
+      margin: 3px 0;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      transition: width 0.3s ease, background 0.3s ease;
+    }
+    .bar-green  { background: var(--green); }
+    .bar-yellow { background: var(--yellow); }
+    .bar-red    { background: var(--red); }
+
+    /* ── Tables ───────────────────────────────────────────────────── */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .data-table th {
+      text-align: left;
+      color: var(--dim);
+      font-weight: 500;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      padding: 0 8px 4px 0;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: 3px 8px 3px 0;
+      vertical-align: middle;
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+
+    .side-buy  { color: var(--green); font-weight: 600; }
+    .side-sell { color: var(--red);   font-weight: 600; }
+
+    .empty-row td { color: var(--dim); font-style: italic; }
+
+    /* ── Risk panel ───────────────────────────────────────────────── */
+    #kill-banner {
+      display: none;
+      background: rgba(248,81,73,.15);
+      border: 1px solid var(--red);
+      border-radius: var(--radius);
+      color: var(--red);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      animation: pulse 1s ease-in-out infinite;
+      letter-spacing: 0.02em;
+    }
+    #kill-banner.active { display: block; }
+
+    /* ── Log pane ─────────────────────────────────────────────────── */
+    #log-panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    #log-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 10px;
+      font-family: var(--mono);
+      font-size: 11.5px;
+    }
+
+    .log-line {
+      display: flex;
+      gap: 8px;
+      padding: 1px 0;
+      border-bottom: 1px solid transparent;
+    }
+    .log-ts { color: var(--dim); flex-shrink: 0; }
+    .log-msg { word-break: break-word; }
+
+    /* Rich markup span classes */
+    .tag-red       { color: var(--red); }
+    .tag-green     { color: var(--green); }
+    .tag-yellow    { color: var(--yellow); }
+    .tag-dim       { color: var(--dim); }
+    .tag-bold-red  { color: var(--red); font-weight: 700; }
+    .tag-bold      { font-weight: 700; }
+    .tag-cyan      { color: var(--cyan); }
+    .tag-white     { color: var(--text); }
+
+    /* ── Colors ───────────────────────────────────────────────────── */
+    .c-green  { color: var(--green); }
+    .c-red    { color: var(--red); }
+    .c-yellow { color: var(--yellow); }
+    .c-dim    { color: var(--dim); }
+    .c-blue   { color: var(--blue); }
+    .c-purple { color: var(--purple); }
+
+    /* ── Animations ───────────────────────────────────────────────── */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.55; }
+    }
+
+    /* ── Responsive ───────────────────────────────────────────────── */
+    @media (max-width: 1100px) {
+      #main-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+      }
+    }
+    @media (max-width: 700px) {
+      #main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Scrollbars ───────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <div id="header">
+    <span class="brand">A-S Market Maker</span>
+    <span class="sep">|</span>
+    <span class="hitem"><span class="hlabel">Symbol</span><span class="hval" id="h-symbol">—</span></span>
+    <span class="sep">|</span>
+    <span class="hitem"><span class="hlabel">Mode</span><span class="hval" id="h-mode">—</span></span>
+    <span class="sep">|</span>
+    <span class="hitem"><span class="hlabel">Uptime</span><span class="hval" id="h-uptime">—</span></span>
+    <span class="sep">|</span>
+    <span class="hitem"><span class="hlabel">Iter</span><span class="hval" id="h-iter">—</span></span>
+    <span class="sep">|</span>
+    <span class="hitem"><span class="hlabel">Regime</span><span id="regime-badge" class="unknown">—</span></span>
+    <span id="conn-badge" class="disc">DISCONNECTED</span>
+  </div>
+
+  <!-- ── Main grid ──────────────────────────────────────────────── -->
+  <div id="main-grid">
+
+    <!-- Market Data -->
+    <div class="panel" id="panel-market">
+      <div class="panel-title">Market Data</div>
+      <div class="panel-body">
+        <div id="sparkline-wrap">
+          <svg id="sparkline" viewBox="0 0 300 44" preserveAspectRatio="none">
+            <polyline id="spark-line" fill="none" stroke="#388bfd" stroke-width="1.5" points=""/>
+          </svg>
+        </div>
+        <div class="kv-grid" id="market-kv"></div>
+      </div>
+    </div>
+
+    <!-- Position & P&L -->
+    <div class="panel" id="panel-position">
+      <div class="panel-title">Position &amp; P&amp;L</div>
+      <div class="panel-body">
+        <div class="kv-grid" id="position-kv"></div>
+      </div>
+    </div>
+
+    <!-- Risk -->
+    <div class="panel" id="panel-risk">
+      <div class="panel-title">Risk</div>
+      <div class="panel-body">
+        <div id="kill-banner">KILL SWITCH ACTIVE</div>
+        <div class="kv-grid" id="risk-kv"></div>
+      </div>
+    </div>
+
+    <!-- Open Orders -->
+    <div class="panel" id="panel-orders">
+      <div class="panel-title">Open Orders</div>
+      <div class="panel-body">
+        <table class="data-table" id="orders-table">
+          <thead><tr>
+            <th>Side</th><th>Price</th><th>Size</th><th>Age</th>
+          </tr></thead>
+          <tbody id="orders-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Fills -->
+    <div class="panel" id="panel-fills">
+      <div class="panel-title">Recent Fills</div>
+      <div class="panel-body">
+        <table class="data-table" id="fills-table">
+          <thead><tr>
+            <th>Time</th><th>Side</th><th>Price</th><th>Size</th><th>Fee</th>
+          </tr></thead>
+          <tbody id="fills-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /main-grid -->
+
+  <!-- ── Log pane ───────────────────────────────────────────────── -->
+  <div id="log-panel" class="panel">
+    <div class="panel-title">Log</div>
+    <div id="log-body"></div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+  // ── Rich markup → HTML spans ──────────────────────────────────────
+  function renderTag(s) {
+    return s.replace(/\[(\/?)([\w\s]+)\]/g, (m, close, tag) =>
+      close ? '</span>' : `<span class="tag-${tag.trim().replace(/\s+/g, '-')}">`
+    );
+  }
+
+  // ── Formatting helpers ────────────────────────────────────────────
+  function fmt(v, decimals = 2) {
+    if (v === null || v === undefined) return '—';
+    return Number(v).toLocaleString('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  }
+
+  function fmtAge(s) {
+    if (s < 60) return `${Math.round(s)}s`;
+    return `${(s / 60).toFixed(1)}m`;
+  }
+
+  function fmtUptime(secs) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.floor(secs % 60);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  function pnlClass(v) {
+    return v > 0 ? 'c-green' : v < 0 ? 'c-red' : 'c-dim';
+  }
+
+  function pnlStr(v) {
+    if (v === null || v === undefined) return '—';
+    const sign = v > 0 ? '+' : '';
+    return `${sign}${fmt(v, 4)}`;
+  }
+
+  // ── KV row builder ────────────────────────────────────────────────
+  function kvRows(pairs) {
+    return pairs.map(([label, valHtml]) =>
+      `<span class="kv-label">${label}</span><span class="kv-val">${valHtml}</span>`
+    ).join('');
+  }
+
+  // ── Inventory progress bar ────────────────────────────────────────
+  function invBar(pct) {
+    const cls = pct < 50 ? 'bar-green' : pct < 80 ? 'bar-yellow' : 'bar-red';
+    const w = Math.min(pct, 100).toFixed(1);
+    return `<div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${w}%"></div></div>`;
+  }
+
+  // ── Drawdown bar ──────────────────────────────────────────────────
+  function ddBar(dd, max) {
+    const pct = max > 0 ? Math.min((dd / max) * 100, 100) : 0;
+    const cls = pct < 40 ? 'bar-green' : pct < 80 ? 'bar-yellow' : 'bar-red';
+    return `<div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${pct.toFixed(1)}%"></div></div>`;
+  }
+
+  // ── Sparkline ─────────────────────────────────────────────────────
+  function updateSparkline(prices) {
+    const line = document.getElementById('spark-line');
+    if (!prices || prices.length < 2) { line.setAttribute('points', ''); return; }
+    const mn = Math.min(...prices);
+    const mx = Math.max(...prices);
+    const range = mx - mn || 1;
+    const W = 300, H = 44, PAD = 2;
+    const pts = prices.map((p, i) => {
+      const x = (i / (prices.length - 1)) * W;
+      const y = PAD + (1 - (p - mn) / range) * (H - PAD * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    line.setAttribute('points', pts.join(' '));
+  }
+
+  // ── Side badge ────────────────────────────────────────────────────
+  function sideBadge(side) {
+    return side === 'buy'
+      ? '<span class="side-buy">BUY</span>'
+      : '<span class="side-sell">SELL</span>';
+  }
+
+  // ── Connection badge ──────────────────────────────────────────────
+  function setConnectionBadge(ok) {
+    const el = document.getElementById('conn-badge');
+    if (ok) { el.textContent = 'LIVE'; el.className = 'live'; }
+    else     { el.textContent = 'DISCONNECTED'; el.className = 'disc'; }
+  }
+
+  // ── Log pane (kept separate — append-only for perf) ───────────────
+  let _lastLogLen = 0;
+  function updateLog(logLines) {
+    if (!logLines || logLines.length === _lastLogLen) return;
+    const body = document.getElementById('log-body');
+    const newLines = logLines.slice(_lastLogLen);
+    _lastLogLen = logLines.length;
+    const frag = document.createDocumentFragment();
+    newLines.forEach(entry => {
+      const div = document.createElement('div');
+      div.className = 'log-line';
+      div.innerHTML = `<span class="log-ts">${entry.ts}</span><span class="log-msg">${renderTag(entry.message)}</span>`;
+      frag.appendChild(div);
+    });
+    body.appendChild(frag);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  // ── Main render ───────────────────────────────────────────────────
+  function render(d) {
+    // Header
+    document.getElementById('h-symbol').textContent = d.symbol || '—';
+    document.getElementById('h-mode').textContent   = d.strategy_mode || '—';
+    document.getElementById('h-uptime').textContent = fmtUptime(d.uptime_seconds || 0);
+    document.getElementById('h-iter').textContent   = (d.iteration || 0).toLocaleString();
+
+    const rb = document.getElementById('regime-badge');
+    const regime = (d.regime || 'unknown').toLowerCase();
+    rb.textContent  = regime.toUpperCase();
+    rb.className    = regime === 'trend' ? 'trend' : regime === 'range' ? 'range' : 'unknown';
+
+    // Market
+    const mkt = d.market;
+    updateSparkline(mkt ? mkt.price_history : null);
+    document.getElementById('market-kv').innerHTML = kvRows(
+      mkt ? [
+        ['Mid Price',  `<strong>${fmt(mkt.mid_price, 2)}</strong>`],
+        ['Microprice', fmt(mkt.microprice, 2)],
+        ['Spread',     fmt(mkt.spread, 4)],
+        ['Best Bid',   `<span class="c-green">${fmt(mkt.best_bid, 2)}</span> <span class="c-dim">(${fmt(mkt.best_bid_size, 4)})</span>`],
+        ['Best Ask',   `<span class="c-red">${fmt(mkt.best_ask, 2)}</span> <span class="c-dim">(${fmt(mkt.best_ask_size, 4)})</span>`],
+        ['Volatility', fmt(mkt.volatility, 6)],
+        ['Imbalance',  (() => { const v = mkt.imbalance; return `<span class="${pnlClass(v)}">${fmt(v,4)}</span>`; })()],
+        ['Latency',    `${fmt(mkt.latency_ms, 0)} ms`],
+        ['Data',       mkt.is_stale ? '<span class="pill pill-stale">STALE</span>' : '<span class="pill pill-live">LIVE</span>'],
+      ] : [
+        ['Status', '<span class="c-yellow">Waiting for data...</span>'],
+      ]
+    );
+
+    // Position
+    const pos = d.position || {};
+    const inv = pos.inventory || 0;
+    const invPct = pos.inventory_pct || 0;
+    const invCls = invPct < 50 ? 'c-green' : invPct < 80 ? 'c-yellow' : 'c-red';
+    const realPnl = pos.realized_pnl || 0;
+    const unrealPnl = pos.unrealized_pnl || 0;
+    const totalPnl = realPnl + unrealPnl;
+    document.getElementById('position-kv').innerHTML = kvRows([
+      ['Inventory',
+        `<span class="${invCls}">${inv >= 0 ? '+' : ''}${fmt(inv,6)}</span>` +
+        invBar(invPct) +
+        `<span class="${invCls} c-dim" style="font-size:11px">${invPct.toFixed(1)}%</span>`],
+      ['Avg Entry',  pos.avg_entry_price > 0 ? fmt(pos.avg_entry_price, 2) : '<span class="c-dim">—</span>'],
+      ['Realized',   `<span class="${pnlClass(realPnl)}">${pnlStr(realPnl)}</span>`],
+      ['Unrealized', `<span class="${pnlClass(unrealPnl)}">${pnlStr(unrealPnl)}</span>`],
+      ['Total P&L',  `<span class="${pnlClass(totalPnl)}">${pnlStr(totalPnl)}</span>`],
+      ['Bid VWAP',   pos.bid_vwap > 0 ? fmt(pos.bid_vwap, 2) : '<span class="c-dim">—</span>'],
+      ['Ask VWAP',   pos.ask_vwap > 0 ? fmt(pos.ask_vwap, 2) : '<span class="c-dim">—</span>'],
+    ]);
+
+    // Risk
+    const risk = d.risk || {};
+    const dd    = risk.drawdown_pct || 0;
+    const maxDd = risk.max_drawdown_pct || 0.05;
+    const ddCls = dd < 0.02 ? 'c-green' : dd < 0.04 ? 'c-yellow' : 'c-red';
+    document.getElementById('risk-kv').innerHTML = kvRows([
+      ['Drawdown',
+        `<span class="${ddCls}">${(dd * 100).toFixed(2)}%</span> / ${(maxDd * 100).toFixed(2)}%` +
+        ddBar(dd, maxDd)],
+      ['Kill Switch', risk.kill_switch_active
+        ? `<span class="c-red" style="font-weight:700">ACTIVE</span>`
+        : `<span class="c-green">OFF</span>`],
+      ...(risk.kill_switch_active && risk.kill_switch_reason
+        ? [['Reason', `<span class="c-red">${risk.kill_switch_reason}</span>`]]
+        : []),
+    ]);
+
+    const banner = document.getElementById('kill-banner');
+    if (risk.kill_switch_active) {
+      banner.classList.add('active');
+      banner.textContent = `KILL SWITCH ACTIVE${risk.kill_switch_reason ? ' — ' + risk.kill_switch_reason : ''}`;
+    } else {
+      banner.classList.remove('active');
+    }
+
+    // Orders
+    const orders = d.orders || [];
+    const obody = document.getElementById('orders-body');
+    if (orders.length === 0) {
+      obody.innerHTML = '<tr class="empty-row"><td colspan="4">No open orders</td></tr>';
+    } else {
+      obody.innerHTML = orders.map(o =>
+        `<tr>
+          <td>${sideBadge(o.side)}</td>
+          <td>${fmt(o.price, 2)}</td>
+          <td>${fmt(o.size, 6)}</td>
+          <td class="c-dim">${fmtAge(o.age_seconds)}</td>
+        </tr>`
+      ).join('');
+    }
+
+    // Fills
+    const fills = d.fills || [];
+    const fbody = document.getElementById('fills-body');
+    if (fills.length === 0) {
+      fbody.innerHTML = '<tr class="empty-row"><td colspan="5">No fills yet</td></tr>';
+    } else {
+      fbody.innerHTML = [...fills].reverse().map(f =>
+        `<tr>
+          <td class="c-dim">${f.time}</td>
+          <td>${sideBadge(f.side)}</td>
+          <td>${fmt(f.price, 2)}</td>
+          <td>${fmt(f.size, 6)}</td>
+          <td class="c-dim">${fmt(f.fee, 6)}</td>
+        </tr>`
+      ).join('');
+    }
+
+    // Log
+    updateLog(d.log);
+  }
+
+  // ── Polling loop ──────────────────────────────────────────────────
+  async function tick() {
+    try {
+      const res  = await fetch('/api/state');
+      const data = await res.json();
+      setConnectionBadge(true);
+      render(data);
+    } catch (e) {
+      setConnectionBadge(false);
+    }
+    setTimeout(tick, 500);
+  }
+
+  tick();
+</script>
+</body>
+</html>

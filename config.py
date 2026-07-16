@@ -43,13 +43,13 @@ class Config:
     base_spread_ticks: float = 1.0         # Additive base spread in tick units
 
     # ── Inventory ───────────────────────────────────────────────────────
-    max_inventory: float = 0.01            # Max absolute position size (in base)
+    max_inventory: float = 0.03            # Max absolute position size (in base)
     target_inventory: float = 0.0          # Desired neutral inventory level
 
     # ── Capital & sizing ────────────────────────────────────────────────
     initial_capital: float = 1000.0        # Starting capital in quote currency
     leverage: float = 1.0                  # Leverage multiplier (1 = no leverage)
-    order_size_base: float = 0.001         # Base order size in base currency
+    order_size_base: float = 0.01          # Base order size in base currency
     order_size_pct: float = 0.05           # Order size as % of capital (alt mode)
     use_pct_sizing: bool = False           # If True, use order_size_pct instead
 
@@ -87,9 +87,11 @@ class Config:
     range_size_multiplier: float = 1.0     # Normal size in range regime
 
     # ── Dashboard ───────────────────────────────────────────────────────
-    dashboard_refresh_per_second: int = 4
-    dashboard_log_lines: int = 20
-    dashboard_recent_fills: int = 10
+    dashboard_host: str = "127.0.0.1"
+    dashboard_port: int = 8765
+    dashboard_recent_fills: int = 10      # keep — still used
+    dashboard_log_lines: int = 100        # keep — now just an in-memory ring buffer size
+    dashboard_open_browser: bool = True   # auto-open the tab on startup
 
     # ── Persistence ─────────────────────────────────────────────────────
     state_file: str = "bot_state.json"

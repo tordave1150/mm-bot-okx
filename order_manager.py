@@ -224,7 +224,7 @@ class OrderManager:
             self.orders[order_id] = tracked
             self._record_action()
             logger.info(
-                "Placed %s limit %s %.6f @ %.2f → %s",
+                "Placed %s limit %s %.6f @ %.2f -> %s",
                 side, symbol, size, price, order_id,
             )
             return tracked

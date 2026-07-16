@@ -51,6 +51,8 @@ def main() -> None:
     config = load_config()
     logger.info("Config loaded: symbol=%s, mode=%s, sandbox=%s",
                 config.symbol, config.strategy_mode, config.sandbox)
+    logger.info("Dashboard will be available at http://%s:%d",
+                config.dashboard_host, config.dashboard_port)
 
     if not config.api_key or config.api_key == "your_api_key_here":
         logger.error(

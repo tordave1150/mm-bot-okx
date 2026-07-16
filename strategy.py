@@ -23,7 +23,8 @@ from typing import Any
 from lumibot.strategies import Strategy
 
 from config import Config, load_config
-from dashboard import Dashboard
+from dashboard_state import DashboardState
+from web_server import WebServer
 from fill_tracker import FillTracker
 from market_state import MarketState
 from order_manager import OrderManager
@@ -74,7 +75,8 @@ class AvellanedaMarketMaker(Strategy):
         self.fill_tracker = FillTracker(self.cfg)
         self.regime_detector = RegimeDetector(self.cfg)
         self.state_persistence = StatePersistence(self.cfg.state_file)
-        self.dashboard = Dashboard(self.cfg)
+        self.dashboard_state = DashboardState(self.cfg)
+        self.web_server = WebServer(self.cfg, self.dashboard_state)
 
         # ── Exchange handle ─────────────────────────────────────────────
         self._exchange: Any = None
@@ -93,8 +95,8 @@ class AvellanedaMarketMaker(Strategy):
         self._restore_state()
 
         # ── Start dashboard ─────────────────────────────────────────────
-        self.dashboard.start()
-        self.dashboard.add_log(
+        self.web_server.start()
+        self.dashboard_state.add_log(
             f"Bot initialized — {self.cfg.strategy_mode} mode, "
             f"symbol={self.cfg.symbol}, sandbox={self.cfg.sandbox}"
         )
@@ -109,7 +111,7 @@ class AvellanedaMarketMaker(Strategy):
         if self._exchange is None:
             self._init_exchange()
             if self._exchange is None:
-                self.dashboard.add_log("[red]No exchange connection — skipping[/]")
+                self.dashboard_state.add_log("[red]No exchange connection — skipping[/]")
                 return
 
         actions: list[str] = []
@@ -118,7 +120,7 @@ class AvellanedaMarketMaker(Strategy):
         self._update_market_data()
 
         if self.market_state.mid_price <= 0:
-            self.dashboard.add_log("[yellow]No market data yet — waiting[/]")
+            self.dashboard_state.add_log("[yellow]No market data yet — waiting[/]")
             self._update_dashboard(actions)
             return
 
@@ -183,7 +185,7 @@ class AvellanedaMarketMaker(Strategy):
         )
 
         if not risk_result.allow_quoting:
-            self.dashboard.add_log(f"[yellow]Quoting paused: {risk_result.reason}[/]")
+            self.dashboard_state.add_log(f"[yellow]Quoting paused: {risk_result.reason}[/]")
             self._update_dashboard(actions)
             return
 
@@ -205,7 +207,7 @@ class AvellanedaMarketMaker(Strategy):
     def on_abrupt_closing(self) -> None:
         """Called when the bot is shutting down — cancel all orders."""
         logger.warning("Abrupt closing — cancelling all orders")
-        self.dashboard.add_log("[red]Shutting down — cancelling all orders[/]")
+        self.dashboard_state.add_log("[red]Shutting down — cancelling all orders[/]")
 
         if self._exchange:
             try:
@@ -215,12 +217,12 @@ class AvellanedaMarketMaker(Strategy):
 
         self._save_state()
         self._stop_ws()
-        self.dashboard.stop()
+        self.web_server.stop()
 
     def on_bot_crash(self, error: Exception) -> None:
         """Called when the bot crashes — emergency cleanup."""
         logger.critical("Bot crashed: %s", error, exc_info=True)
-        self.dashboard.add_log(f"[bold red]CRASH: {error}[/]")
+        self.dashboard_state.add_log(f"[bold red]CRASH: {error}[/]")
 
         if self._exchange:
             try:
@@ -230,7 +232,7 @@ class AvellanedaMarketMaker(Strategy):
 
         self._save_state()
         self._stop_ws()
-        self.dashboard.stop()
+        self.web_server.stop()
 
     # ── Exchange Initialisation ─────────────────────────────────────────
 
@@ -263,7 +265,7 @@ class AvellanedaMarketMaker(Strategy):
                 self._market_info = fetch_market_info(
                     self._exchange, self.cfg.symbol
                 )
-                self.dashboard.add_log(
+                self.dashboard_state.add_log(
                     f"Exchange connected: {self.cfg.exchange_name} "
                     f"sandbox={self.cfg.sandbox} "
                     f"(tick={self._market_info['tick_size']}, "
@@ -436,7 +438,7 @@ class AvellanedaMarketMaker(Strategy):
         self.risk_manager.peak_equity = state.get("peak_equity", self.cfg.initial_capital)
         self.risk_manager.realized_pnl = state.get("realized_pnl", 0.0)
 
-        self.dashboard.add_log(
+        self.dashboard_state.add_log(
             f"State restored: pos={state.get('inventory', 0):.6f}, "
             f"realized_pnl={state.get('realized_pnl', 0):.4f}"
         )
@@ -469,11 +471,11 @@ class AvellanedaMarketMaker(Strategy):
     # ── Dashboard ───────────────────────────────────────────────────────
 
     def _update_dashboard(self, actions: list[str]) -> None:
-        """Push latest data to the Rich dashboard."""
+        """Push latest data to the browser dashboard state snapshot."""
         unrealized = self.fill_tracker.compute_unrealized_pnl(
             self.market_state.mid_price
         )
-        self.dashboard.update(
+        self.dashboard_state.update(
             market_state=self.market_state,
             inventory=self.fill_tracker.position,
             avg_entry_price=self.fill_tracker.avg_entry_price,
