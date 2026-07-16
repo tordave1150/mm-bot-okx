@@ -4,3 +4,10 @@ python-dotenv>=1.0.0
 fastapi>=0.110.0
 uvicorn>=0.29.0
 numpy>=1.24.0
+
+# ── Backtest engine dependencies ─────────────────────────────────────────────
+arch>=6.0.0          # GARCH(1,1) modeling for synthetic_data.py
+scipy>=1.10.0        # Required by arch
+PyYAML>=6.0.0        # Scenario config loading in agent_loop.py
+pytest>=7.0.0        # Unit test runner for backtest/tests/
+# Note: empyrical does not build on Python 3.12+; metrics.py uses pure numpy

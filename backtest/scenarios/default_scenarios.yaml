@@ -1,0 +1,129 @@
+# backtest/scenarios/default_scenarios.yaml
+#
+# Configuration for the AI agent backtest loop.
+#
+# IMPORTANT: Set acceptance_criteria thresholds BEFORE running agent_loop.py.
+# Do NOT adjust these values AFTER seeing results — that defeats the purpose.
+#
+# All thresholds are checked per-scenario.  The agent loop reports a PASS
+# only when ALL thresholds are satisfied simultaneously.
+
+# ── Stopping condition ───────────────────────────────────────────────────────
+stopping:
+  # Number of consecutive PASSING scenarios required to declare the bot
+  # stress-tested and ready for deployment review.
+  n_consecutive_pass: 20
+
+# ── Acceptance criteria ──────────────────────────────────────────────────────
+# These are absolute pass/fail gates — not soft targets.
+acceptance_criteria:
+  # MaxDD must be BELOW this fraction (0.15 = 15%)
+  # Kill-switch should trigger before this is reached.
+  max_dd_limit: 0.15
+
+  # CVaR (95%) must be ABOVE this fraction.
+  # CVaR is expressed as a positive loss magnitude; a lower cvar_95_limit
+  # means we accept larger tail losses.
+  # e.g., 0.08 means tail losses must not exceed 8% of equity on average.
+  cvar_95_limit: 0.08
+
+  # Kill-switch must NOT trigger for standard (non-crash) scenarios.
+  # Setting this to false means kill-switch firing in a normal scenario = FAIL.
+  allow_kill_switch_in_normal: false
+
+  # Kill-switch MUST trigger for crash scenarios.
+  # Setting this to true means no kill-switch in a crash scenario = FAIL.
+  require_kill_switch_in_crash: true
+
+# ── Normal scenario parameter bounds ─────────────────────────────────────────
+# The Scenario Designer samples uniformly within these ranges.
+# These bounds define the SPACE of tested scenarios — not individual seeds.
+scenario_bounds:
+  # Weekly volatility range (annualised = vol_weekly * sqrt(52))
+  vol_weekly_min: 0.15
+  vol_weekly_max: 0.40
+
+  # Average regime duration in days (Markov switch rate)
+  regime_duration_days_min: 1.0
+  regime_duration_days_max: 7.0
+
+  # Jump frequency (expected jumps per day — Poisson rate)
+  jump_freq_min: 0.0
+  jump_freq_max: 0.5
+
+  # Jump magnitude (log-normal std)
+  jump_size_min: 0.005
+  jump_size_max: 0.04
+
+  # Simulation length
+  n_days: 30
+  ticks_per_day: 288   # 5-minute ticks for 24h
+
+  # Starting price (approximate BTC price for realistic spread sizing)
+  start_price: 50000.0
+
+# ── Crash / stress scenarios (fixed parameters, not sampled) ─────────────────
+# Each entry is run as a named scenario.  kill_switch_expected: true means
+# the evaluator REQUIRES a kill-switch trigger or it marks a FAIL.
+crash_scenarios:
+  - name: "flash_crash_severe"
+    description: "Sharp 8%+ single-tick drops, 3× weekly vol"
+    generator: gbm
+    vol_weekly: 0.80
+    regime_duration_days: 0.5
+    jump_freq: 3.0
+    jump_size: 0.08
+    n_days: 7
+    ticks_per_day: 288
+    expect_kill_switch: true
+
+  - name: "extended_bear"
+    description: "BTC_2022_BEAR block bootstrap — prolonged downtrend"
+    generator: block_bootstrap
+    block_libraries: ["BTC_2022_BEAR", "BTC_CRASH"]
+    block_size: 5
+    n_days: 30
+    ticks_per_day: 288
+    expect_kill_switch: true
+
+  - name: "super_bullish"
+    description: "Extreme bull run — inventory may accumulate on ask side"
+    generator: gbm
+    vol_weekly: 0.60
+    regime_duration_days: 10.0
+    jump_freq: 0.1
+    jump_size: 0.05
+    n_days: 30
+    ticks_per_day: 288
+    # Kill-switch not required — bot should handle bull runs without halting
+    expect_kill_switch: false
+
+# ── Seed sequence for the agent loop ─────────────────────────────────────────
+# Seeds used for reproducible but diverse scenario sampling.
+# The agent loop cycles through these in order.  Add more for longer runs.
+seeds:
+  - 42
+  - 137
+  - 271
+  - 314
+  - 999
+  - 1234
+  - 5678
+  - 9999
+  - 31415
+  - 27182
+  - 100
+  - 200
+  - 300
+  - 400
+  - 500
+  - 600
+  - 700
+  - 800
+  - 900
+  - 1000
+  - 1111
+  - 2222
+  - 3333
+  - 4444
+  - 5555

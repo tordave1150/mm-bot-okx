@@ -80,6 +80,23 @@ python main.py
 ```
 *(เมื่อรันบอท หน้าจอ Dashboard จะถูกเปิดขึ้นมาบน Browser อัตโนมัติที่ `http://127.0.0.1:8765`)*
 
+## ระบบ Backtest และ Stress-Test (ออฟไลน์)
+
+บอทมาพร้อมกับระบบ Backtest แบบออฟไลน์ที่แยกส่วนออกมา (`backtest/`) โดยไม่ยุ่งเกี่ยวกับโค้ด Production เดิม ระบบนี้สามารถสร้างข้อมูลตลาดจำลอง (Synthetic Data) แบบสุ่มและทดสอบบอทในสภาวะตลาดแบบต่างๆ เช่น ความผันผวนสูง (High Volatility) หรือตลาดพัง (Crash)
+
+**คำสั่งรันระบบ Backtest:**
+
+```bash
+# รัน Unit Tests เพื่อเช็คความถูกต้องของ Matching Engine
+.\myenv\Scripts\python.exe -m pytest backtest/tests/ -v
+
+# รัน 1 Scenario ขำๆ (Smoke Test)
+.\myenv\Scripts\python.exe -W ignore -m backtest.runner --seed 42 --vol 0.25 --n-days 30
+
+# รัน Agent Loop (รันจนกว่าจะผ่านเกณฑ์ 20 รอบติดกัน)
+.\myenv\Scripts\python.exe -W ignore -m backtest.agent_loop
+```
+
 ## การตั้งค่า (Configuration)
 
 พารามิเตอร์ทั้งหมดสามารถตั้งค่าได้ที่ไฟล์ `config.py` ค่าที่สำคัญมีดังนี้:
