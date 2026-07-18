@@ -34,8 +34,8 @@ class Config:
     strategy_mode: Literal["avellaneda", "volatility"] = "avellaneda"
 
     # ── Avellaneda-Stoikov parameters ───────────────────────────────────
-    gamma: float = 0.1                     # Risk aversion (higher → wider spread)
-    k: float = 1.5                         # Order book liquidity/depth parameter
+    gamma: float = 0.034                   # Risk aversion (higher → wider spread)
+    k: float = 2.586                        # Order book liquidity/depth parameter
     tau: float = 1.0                       # Time horizon (1 for continuous perps)
 
     # ── Volatility-based fallback parameters ────────────────────────────
@@ -43,7 +43,7 @@ class Config:
     base_spread_ticks: float = 1.0         # Additive base spread in tick units
 
     # ── Inventory ───────────────────────────────────────────────────────
-    max_inventory: float = 0.03            # Max absolute position size (in base)
+    max_inventory: float = 0.078           # Max absolute position size (in base)
     target_inventory: float = 0.0          # Desired neutral inventory level
 
     # ── Capital & sizing ────────────────────────────────────────────────
@@ -54,7 +54,7 @@ class Config:
     use_pct_sizing: bool = False           # If True, use order_size_pct instead
 
     # ── Risk management ─────────────────────────────────────────────────
-    max_drawdown_pct: float = 0.05         # 5% drawdown → kill switch
+    max_drawdown_pct: float = 0.031        # 5% drawdown → kill switch
     liquidation_distance_pct: float = 0.10 # Warn/halt if within 10% of liq price
     max_orders_per_second: int = 5         # Rate limit on order actions
 
@@ -81,7 +81,7 @@ class Config:
     regime_ema_divergence_threshold: float = 0.001
 
     # ── Regime-based adjustments ────────────────────────────────────────
-    trend_spread_multiplier: float = 1.5   # Widen spreads in trend regime
+    trend_spread_multiplier: float = 2.27  # Widen spreads in trend regime
     trend_size_multiplier: float = 0.5     # Reduce size in trend regime
     range_spread_multiplier: float = 0.8   # Tighten spreads in range regime
     range_size_multiplier: float = 1.0     # Normal size in range regime

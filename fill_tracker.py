@@ -97,6 +97,17 @@ class FillTracker:
             # Fetch recent trades (last 100)
             trades = exchange.fetch_my_trades(symbol, limit=100)
 
+            # If this is the very first fetch on a fresh start (no state loaded),
+            # mark existing historical trades as known but don't process them.
+            if not getattr(self, "_initialized_fills", False):
+                self._initialized_fills = True
+                if not self._known_fill_ids and trades:
+                    logger.info("Fresh start: ignoring %d historical trades.", len(trades))
+                    for trade in trades:
+                        if "id" in trade:
+                            self._known_fill_ids.add(trade["id"])
+                    return []
+
             for trade in trades:
                 fill_id = trade.get("id", "")
                 if not fill_id or fill_id in self._known_fill_ids:
