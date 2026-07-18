@@ -1,498 +1,443 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>A-S Market Maker — Dashboard</title>
-  <meta name="description" content="Live dashboard for the Avellaneda-Stoikov Market Maker bot running on OKX." />
-  <style>
-    /* ── Reset & base ─────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AS-MM · Agent Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#04060a;
+    --void-2:#070c14;
+    --panel: rgba(13,20,30,0.55);
+    --panel-solid:#0a121c;
+    --edge: rgba(120,255,200,0.14);
+    --edge-strong: rgba(120,255,200,0.35);
+    --mint:#2dffb0;
+    --mint-dim: rgba(45,255,176,0.5);
+    --magenta:#c25bff;
+    --amber:#ffb347;
+    --red:#ff3d5f;
+    --text:#e7f5ee;
+    --dim:#6c8394;
+    --dim-2:#3d4d59;
+    --radius: 14px;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --hud: 'Chakra Petch', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--void);color:var(--text);font-family:var(--mono);}
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(ellipse 120% 80% at 15% -10%, rgba(45,255,176,0.08), transparent 55%),
+      radial-gradient(ellipse 100% 70% at 100% 0%, rgba(194,91,255,0.08), transparent 50%),
+      var(--void);
+    overflow-x:hidden;
+  }
+  #bg-canvas{
+    position:fixed; inset:0; width:100%; height:100%;
+    z-index:0; pointer-events:none; opacity:0.55;
+  }
+  .wrap{position:relative; z-index:2; max-width:1400px; margin:0 auto; padding:18px 20px 40px;}
 
-    :root {
-      --bg:       #0d1117;
-      --bg2:      #161b22;
-      --bg3:      #21262d;
-      --border:   #30363d;
-      --text:     #e6edf3;
-      --dim:      #8b949e;
-      --green:    #3fb950;
-      --red:      #f85149;
-      --yellow:   #d29922;
-      --blue:     #388bfd;
-      --purple:   #bc8cff;
-      --cyan:     #39c5cf;
-      --mono:     'JetBrains Mono', 'Fira Mono', 'Cascadia Code', ui-monospace, monospace;
-      --sans:     'Inter', system-ui, sans-serif;
-      --radius:   6px;
-    }
+  /* ── scrollbar ─────────────────────────────────────────── */
+  ::-webkit-scrollbar{width:8px; height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--dim-2); border-radius:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
 
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--sans);
-      font-size: 13px;
-      line-height: 1.5;
-    }
+  /* ── Header ────────────────────────────────────────────── */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:12px;
+    padding:14px 20px; margin-bottom:18px;
+    background:var(--panel); border:1px solid var(--edge); border-radius:var(--radius);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 40px rgba(45,255,176,0.05), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand-mark{
+    width:38px; height:38px; border-radius:9px;
+    background: conic-gradient(from 220deg, var(--mint), var(--magenta), var(--mint));
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--hud); font-weight:700; color:#04140d; font-size:15px;
+    box-shadow: 0 0 22px var(--mint-dim);
+  }
+  .brand-text .name{font-family:var(--hud); font-weight:700; font-size:17px; letter-spacing:0.5px;}
+  .brand-text .sub{font-size:11px; color:var(--dim); letter-spacing:1.5px; text-transform:uppercase;}
+  .hdr-stats{display:flex; align-items:center; gap:22px; flex-wrap:wrap;}
+  .hstat{display:flex; flex-direction:column; gap:2px;}
+  .hstat .l{font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:1.2px;}
+  .hstat .v{font-family:var(--hud); font-size:15px; font-weight:600;}
+  .badge{
+    padding:4px 10px; border-radius:20px; font-size:10.5px; font-weight:700;
+    letter-spacing:1px; text-transform:uppercase; font-family:var(--hud);
+  }
+  .badge.trend{background:rgba(255,179,71,0.14); color:var(--amber); border:1px solid rgba(255,179,71,0.35);}
+  .badge.range{background:rgba(45,255,176,0.14); color:var(--mint); border:1px solid rgba(45,255,176,0.35);}
+  .badge.unknown{background:rgba(108,131,148,0.14); color:var(--dim); border:1px solid var(--dim-2);}
+  #conn-badge.live{color:var(--mint);}
+  #conn-badge.disc{color:var(--red);}
+  #conn-badge{display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:1px;}
+  #conn-badge::before{content:''; width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor;}
+  #conn-badge.live::before{animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
 
-    /* ── Layout ───────────────────────────────────────────────────── */
-    body {
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      grid-template-columns: 1fr;
-      min-height: 100vh;
-      gap: 0;
-    }
+  .ctrl-group{display:flex; align-items:center; gap:10px;}
+  button.stopbtn{
+    font-family:var(--hud); font-weight:700; font-size:12.5px; letter-spacing:1.2px;
+    text-transform:uppercase; padding:10px 20px; border-radius:10px; cursor:pointer;
+    border:1px solid; transition:transform .12s ease, box-shadow .12s ease;
+  }
+  button.stopbtn:active{transform:scale(0.96);}
+  button.stopbtn.running{
+    background:rgba(255,61,95,0.12); color:var(--red); border-color:rgba(255,61,95,0.5);
+    box-shadow:0 0 22px rgba(255,61,95,0.18);
+    animation:redpulse 2.2s ease-in-out infinite;
+  }
+  button.stopbtn.stopped{
+    background:rgba(45,255,176,0.12); color:var(--mint); border-color:rgba(45,255,176,0.5);
+    box-shadow:0 0 22px rgba(45,255,176,0.18);
+  }
+  button.stopbtn:disabled{opacity:0.5; cursor:wait;}
+  @keyframes redpulse{0%,100%{box-shadow:0 0 14px rgba(255,61,95,0.15);}50%{box-shadow:0 0 30px rgba(255,61,95,0.4);}}
 
-    #app {
-      display: grid;
-      grid-template-rows: auto 1fr 200px;
-      min-height: 100vh;
-      padding: 10px;
-      gap: 8px;
-    }
+  .session-chip{
+    font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+    padding:4px 9px; border-radius:8px; color:var(--dim); border:1px solid var(--dim-2);
+  }
+  .session-chip.backtest{color:var(--magenta); border-color:rgba(194,91,255,0.4); background:rgba(194,91,255,0.08);}
+  .session-chip.live{color:var(--mint); border-color:rgba(45,255,176,0.4); background:rgba(45,255,176,0.08);}
 
-    /* ── Header ───────────────────────────────────────────────────── */
-    #header {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 8px 14px;
-      flex-wrap: wrap;
-    }
+  /* ── Kill / Stop banners ───────────────────────────────── */
+  .banner{
+    display:none; padding:11px 18px; margin-bottom:16px; border-radius:10px;
+    font-family:var(--hud); font-weight:700; letter-spacing:0.6px; font-size:13px;
+    align-items:center; gap:10px;
+  }
+  .banner.active{display:flex;}
+  .banner.kill{background:rgba(255,61,95,0.1); border:1px solid rgba(255,61,95,0.4); color:var(--red);}
+  .banner.stopped{background:rgba(255,179,71,0.1); border:1px solid rgba(255,179,71,0.4); color:var(--amber);}
+  .banner .dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor;animation:pulse 1s infinite;}
 
-    #header .brand {
-      font-weight: 700;
-      font-size: 14px;
-      color: var(--cyan);
-      letter-spacing: 0.03em;
-      white-space: nowrap;
-    }
+  /* ── Hero row (3D tilt cards) ──────────────────────────── */
+  .hero{
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:18px;
+    perspective:1200px;
+  }
+  .tilt-card{
+    position:relative; padding:20px 22px; border-radius:var(--radius);
+    background:linear-gradient(160deg, rgba(20,30,42,0.75), rgba(8,13,20,0.75));
+    border:1px solid var(--edge);
+    transform-style:preserve-3d; transition:transform .12s ease, box-shadow .2s ease;
+    box-shadow: 0 20px 40px -20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow:hidden;
+  }
+  .tilt-card::before{
+    content:''; position:absolute; inset:0; border-radius:var(--radius); padding:1px;
+    background:linear-gradient(120deg, var(--mint-dim), transparent 40%, rgba(194,91,255,0.35));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; pointer-events:none; opacity:0.7;
+  }
+  .tilt-card .eyebrow{font-size:10.5px; letter-spacing:2px; text-transform:uppercase; color:var(--dim); margin-bottom:6px;}
+  .tilt-card .big{font-family:var(--hud); font-weight:700; font-size:34px; line-height:1.1; letter-spacing:0.3px;}
+  .tilt-card .big.mint{color:var(--mint); text-shadow:0 0 24px rgba(45,255,176,0.35);}
+  .tilt-card .big.red{color:var(--red); text-shadow:0 0 24px rgba(255,61,95,0.35);}
+  .tilt-card .sub-row{display:flex; gap:16px; margin-top:12px; flex-wrap:wrap;}
+  .tilt-card .sub-row .s{font-size:11px; color:var(--dim);}
+  .tilt-card .sub-row .s b{color:var(--text); font-weight:600;}
+  .spark{width:100%; height:40px; margin-top:10px;}
+  .gauge-wrap{margin-top:14px;}
+  .gauge-track{height:8px; border-radius:6px; background:rgba(255,255,255,0.06); overflow:hidden;}
+  .gauge-fill{height:100%; border-radius:6px; transition:width .3s ease;}
+  .gauge-fill.g{background:linear-gradient(90deg, var(--mint), #7dffd0);}
+  .gauge-fill.y{background:linear-gradient(90deg, var(--amber), #ffd88a);}
+  .gauge-fill.r{background:linear-gradient(90deg, var(--red), #ff8aa2);}
 
-    .sep { color: var(--border); font-weight: 300; }
+  /* ── Panel grid ────────────────────────────────────────── */
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;}
+  .panel{
+    background:var(--panel); border:1px solid var(--edge); border-radius:var(--radius);
+    padding:16px 18px; backdrop-filter:blur(8px);
+  }
+  .panel h3{
+    margin:0 0 12px; font-family:var(--hud); font-size:12px; letter-spacing:1.6px;
+    text-transform:uppercase; color:var(--dim); display:flex; align-items:center; justify-content:space-between;
+  }
+  .panel h3 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint);}
+  .kv{display:grid; grid-template-columns:auto 1fr; gap:8px 14px; font-size:13px;}
+  .kv-label{color:var(--dim);}
+  .kv-val{text-align:right; font-weight:600;}
+  .c-green{color:var(--mint);} .c-red{color:var(--red);} .c-yellow{color:var(--amber);} .c-dim{color:var(--dim);}
+  .pill{font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:6px; letter-spacing:0.5px;}
+  .pill-live{background:rgba(45,255,176,0.15); color:var(--mint);}
+  .pill-stale{background:rgba(255,179,71,0.15); color:var(--amber);}
 
-    .hitem { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-    .hlabel { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .hval { font-family: var(--mono); font-size: 13px; }
+  .bar-wrap{height:6px; border-radius:6px; background:rgba(255,255,255,0.06); margin:4px 0; overflow:hidden;}
+  .bar-fill{height:100%; border-radius:6px;}
+  .bar-green{background:var(--mint);} .bar-yellow{background:var(--amber);} .bar-red{background:var(--red);}
 
-    #regime-badge {
-      padding: 2px 10px;
-      border-radius: 100px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-    #regime-badge.trend  { background: rgba(248,81,73,.2); color: var(--red); border: 1px solid var(--red); }
-    #regime-badge.range  { background: rgba(63,185,80,.2); color: var(--green); border: 1px solid var(--green); }
-    #regime-badge.unknown { background: rgba(139,148,158,.2); color: var(--dim); border: 1px solid var(--border); }
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  thead th{
+    text-align:left; font-size:10px; color:var(--dim); text-transform:uppercase;
+    letter-spacing:1px; padding:0 8px 8px; font-weight:600; border-bottom:1px solid var(--edge);
+  }
+  tbody td{padding:7px 8px; border-bottom:1px solid rgba(255,255,255,0.04);}
+  tbody tr:last-child td{border-bottom:none;}
+  .empty-row td{color:var(--dim-2); text-align:center; padding:18px 0; font-style:italic;}
+  .side-buy{color:var(--mint); font-weight:700; font-size:11px;}
+  .side-sell{color:var(--red); font-weight:700; font-size:11px;}
+  .scroll-y{max-height:260px; overflow-y:auto;}
 
-    #conn-badge {
-      margin-left: auto;
-      padding: 2px 10px;
-      border-radius: 100px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-    }
-    #conn-badge.live { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid var(--green); }
-    #conn-badge.disc { background: rgba(248,81,73,.15); color: var(--red); border: 1px solid var(--red); animation: pulse 1.5s ease-in-out infinite; }
+  /* ── Log terminal ──────────────────────────────────────── */
+  .terminal{
+    background:var(--panel-solid); border:1px solid var(--edge); border-radius:var(--radius);
+    padding:14px 16px; max-height:220px; overflow-y:auto; font-size:12px;
+  }
+  .log-line{display:flex; gap:10px; padding:2px 0; line-height:1.5;}
+  .log-ts{color:var(--dim-2); flex-shrink:0;}
+  .tag-red{color:var(--red);} .tag-green{color:var(--mint);} .tag-yellow{color:var(--amber);}
+  .tag-dim{color:var(--dim);} .tag-bold-red{color:var(--red); font-weight:700;}
 
-    /* ── Main grid ────────────────────────────────────────────────── */
-    #main-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
-      gap: 8px;
-      min-height: 0;
-    }
+  .demo-flag{
+    position:fixed; bottom:16px; right:16px; z-index:5; font-size:11px; font-family:var(--hud);
+    background:rgba(255,179,71,0.12); color:var(--amber); border:1px solid rgba(255,179,71,0.4);
+    padding:7px 12px; border-radius:9px; letter-spacing:0.5px; display:none;
+  }
+  .demo-flag.show{display:block;}
 
-    /* ── Panel base ───────────────────────────────────────────────── */
-    .panel {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-    }
-
-    .panel-title {
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--dim);
-      padding: 6px 10px 5px;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg3);
-      flex-shrink: 0;
-    }
-
-    .panel-body {
-      padding: 8px 10px;
-      overflow-y: auto;
-      flex: 1;
-    }
-
-    /* ── KV grid ──────────────────────────────────────────────────── */
-    .kv-grid {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 2px 12px;
-      font-family: var(--mono);
-      font-size: 12px;
-    }
-
-    .kv-label { color: var(--dim); white-space: nowrap; }
-    .kv-val   { text-align: right; white-space: nowrap; }
-
-    /* ── Sparkline ────────────────────────────────────────────────── */
-    #sparkline-wrap {
-      margin: 8px 0 4px;
-      height: 44px;
-    }
-    #sparkline {
-      width: 100%;
-      height: 44px;
-      display: block;
-    }
-
-    /* ── Status pill ──────────────────────────────────────────────── */
-    .pill {
-      display: inline-block;
-      padding: 1px 8px;
-      border-radius: 100px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-    }
-    .pill-live  { background: rgba(63,185,80,.2);  color: var(--green); }
-    .pill-stale { background: rgba(248,81,73,.2);  color: var(--red);   }
-
-    /* ── Progress bar ─────────────────────────────────────────────── */
-    .bar-wrap {
-      background: var(--bg3);
-      border-radius: 100px;
-      height: 6px;
-      margin: 3px 0;
-      overflow: hidden;
-    }
-    .bar-fill {
-      height: 100%;
-      border-radius: 100px;
-      transition: width 0.3s ease, background 0.3s ease;
-    }
-    .bar-green  { background: var(--green); }
-    .bar-yellow { background: var(--yellow); }
-    .bar-red    { background: var(--red); }
-
-    /* ── Tables ───────────────────────────────────────────────────── */
-    .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-family: var(--mono);
-      font-size: 12px;
-    }
-    .data-table th {
-      text-align: left;
-      color: var(--dim);
-      font-weight: 500;
-      font-size: 10px;
-      letter-spacing: 0.05em;
-      padding: 0 8px 4px 0;
-      text-transform: uppercase;
-      border-bottom: 1px solid var(--border);
-    }
-    .data-table td {
-      padding: 3px 8px 3px 0;
-      vertical-align: middle;
-    }
-    .data-table tr:last-child td { border-bottom: none; }
-
-    .side-buy  { color: var(--green); font-weight: 600; }
-    .side-sell { color: var(--red);   font-weight: 600; }
-
-    .empty-row td { color: var(--dim); font-style: italic; }
-
-    /* ── Risk panel ───────────────────────────────────────────────── */
-    #kill-banner {
-      display: none;
-      background: rgba(248,81,73,.15);
-      border: 1px solid var(--red);
-      border-radius: var(--radius);
-      color: var(--red);
-      font-weight: 700;
-      font-size: 13px;
-      padding: 8px 12px;
-      margin-bottom: 10px;
-      animation: pulse 1s ease-in-out infinite;
-      letter-spacing: 0.02em;
-    }
-    #kill-banner.active { display: block; }
-
-    /* ── Log pane ─────────────────────────────────────────────────── */
-    #log-panel {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-    }
-
-    #log-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 6px 10px;
-      font-family: var(--mono);
-      font-size: 11.5px;
-    }
-
-    .log-line {
-      display: flex;
-      gap: 8px;
-      padding: 1px 0;
-      border-bottom: 1px solid transparent;
-    }
-    .log-ts { color: var(--dim); flex-shrink: 0; }
-    .log-msg { word-break: break-word; }
-
-    /* Rich markup span classes */
-    .tag-red       { color: var(--red); }
-    .tag-green     { color: var(--green); }
-    .tag-yellow    { color: var(--yellow); }
-    .tag-dim       { color: var(--dim); }
-    .tag-bold-red  { color: var(--red); font-weight: 700; }
-    .tag-bold      { font-weight: 700; }
-    .tag-cyan      { color: var(--cyan); }
-    .tag-white     { color: var(--text); }
-
-    /* ── Colors ───────────────────────────────────────────────────── */
-    .c-green  { color: var(--green); }
-    .c-red    { color: var(--red); }
-    .c-yellow { color: var(--yellow); }
-    .c-dim    { color: var(--dim); }
-    .c-blue   { color: var(--blue); }
-    .c-purple { color: var(--purple); }
-
-    /* ── Animations ───────────────────────────────────────────────── */
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.55; }
-    }
-
-    /* ── Responsive ───────────────────────────────────────────────── */
-    @media (max-width: 1100px) {
-      #main-grid {
-        grid-template-columns: 1fr 1fr;
-        grid-template-rows: auto;
-      }
-    }
-    @media (max-width: 700px) {
-      #main-grid { grid-template-columns: 1fr; }
-    }
-
-    /* ── Scrollbars ───────────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-  </style>
+  @media (max-width:900px){
+    .hero{grid-template-columns:1fr;}
+    .grid2{grid-template-columns:1fr;}
+    header{flex-direction:column; align-items:stretch;}
+  }
+</style>
 </head>
 <body>
-<div id="app">
+<canvas id="bg-canvas"></canvas>
+<div class="wrap">
 
-  <!-- ── Header ─────────────────────────────────────────────────── -->
-  <div id="header">
-    <span class="brand">A-S Market Maker</span>
-    <span class="sep">|</span>
-    <span class="hitem"><span class="hlabel">Symbol</span><span class="hval" id="h-symbol">—</span></span>
-    <span class="sep">|</span>
-    <span class="hitem"><span class="hlabel">Mode</span><span class="hval" id="h-mode">—</span></span>
-    <span class="sep">|</span>
-    <span class="hitem"><span class="hlabel">Uptime</span><span class="hval" id="h-uptime">—</span></span>
-    <span class="sep">|</span>
-    <span class="hitem"><span class="hlabel">Iter</span><span class="hval" id="h-iter">—</span></span>
-    <span class="sep">|</span>
-    <span class="hitem"><span class="hlabel">Regime</span><span id="regime-badge" class="unknown">—</span></span>
-    <span id="conn-badge" class="disc">DISCONNECTED</span>
-  </div>
+  <header>
+    <div class="brand">
+      <div class="brand-mark">AS</div>
+      <div class="brand-text">
+        <div class="name" id="h-symbol">BTC/USDT</div>
+        <div class="sub" id="h-mode">avellaneda · market maker</div>
+      </div>
+    </div>
+    <div class="hdr-stats">
+      <div class="hstat"><span class="l">Regime</span><span class="badge unknown" id="regime-badge">—</span></div>
+      <div class="hstat"><span class="l">Iteration</span><span class="v" id="h-iter">0</span></div>
+      <div class="hstat"><span class="l">Uptime</span><span class="v" id="h-uptime">00:00:00</span></div>
+      <div class="hstat"><span class="l">Session</span><span class="session-chip live" id="session-chip">LIVE</span></div>
+      <div class="hstat"><span class="l">Link</span><span id="conn-badge" class="disc">DISCONNECTED</span></div>
+    </div>
+    <div class="ctrl-group">
+      <button class="stopbtn running" id="stop-btn">■ Stop Bot</button>
+    </div>
+  </header>
 
-  <!-- ── Main grid ──────────────────────────────────────────────── -->
-  <div id="main-grid">
+  <div class="banner kill" id="kill-banner"><span class="dot"></span><span id="kill-text">KILL SWITCH ACTIVE</span></div>
+  <div class="banner stopped" id="stopped-banner"><span class="dot"></span>QUOTING PAUSED — bot stopped from dashboard. Press Resume to continue.</div>
 
-    <!-- Market Data -->
-    <div class="panel" id="panel-market">
-      <div class="panel-title">Market Data</div>
-      <div class="panel-body">
-        <div id="sparkline-wrap">
-          <svg id="sparkline" viewBox="0 0 300 44" preserveAspectRatio="none">
-            <polyline id="spark-line" fill="none" stroke="#388bfd" stroke-width="1.5" points=""/>
-          </svg>
-        </div>
-        <div class="kv-grid" id="market-kv"></div>
+  <section class="hero">
+    <div class="tilt-card" id="card-price">
+      <div class="eyebrow">Mid Price</div>
+      <div class="big mint" id="hero-price">—</div>
+      <svg class="spark" viewBox="0 0 300 44" preserveAspectRatio="none">
+        <polyline id="spark-line" fill="none" stroke="#2dffb0" stroke-width="1.6" points=""/>
+      </svg>
+      <div class="sub-row">
+        <span class="s">Spread <b id="hero-spread">—</b></span>
+        <span class="s">Latency <b id="hero-latency">—</b></span>
+        <span class="s" id="hero-data-pill"></span>
       </div>
     </div>
 
-    <!-- Position & P&L -->
-    <div class="panel" id="panel-position">
-      <div class="panel-title">Position &amp; P&amp;L</div>
-      <div class="panel-body">
-        <div class="kv-grid" id="position-kv"></div>
+    <div class="tilt-card" id="card-pnl">
+      <div class="eyebrow">Total P&amp;L</div>
+      <div class="big" id="hero-pnl">—</div>
+      <div class="sub-row">
+        <span class="s">Realized <b id="hero-realized">—</b></span>
+        <span class="s">Unrealized <b id="hero-unrealized">—</b></span>
+      </div>
+      <div class="sub-row">
+        <span class="s">Bid VWAP <b id="hero-bidvwap">—</b></span>
+        <span class="s">Ask VWAP <b id="hero-askvwap">—</b></span>
       </div>
     </div>
 
-    <!-- Risk -->
-    <div class="panel" id="panel-risk">
-      <div class="panel-title">Risk</div>
-      <div class="panel-body">
-        <div id="kill-banner">KILL SWITCH ACTIVE</div>
-        <div class="kv-grid" id="risk-kv"></div>
+    <div class="tilt-card" id="card-inv">
+      <div class="eyebrow">Inventory Exposure</div>
+      <div class="big" id="hero-inv">—</div>
+      <div class="gauge-wrap">
+        <div class="gauge-track"><div class="gauge-fill g" id="inv-gauge" style="width:0%"></div></div>
+      </div>
+      <div class="sub-row">
+        <span class="s">Avg Entry <b id="hero-entry">—</b></span>
+        <span class="s">Of Max <b id="hero-invpct">0%</b></span>
       </div>
     </div>
+  </section>
 
-    <!-- Open Orders -->
-    <div class="panel" id="panel-orders">
-      <div class="panel-title">Open Orders</div>
-      <div class="panel-body">
-        <table class="data-table" id="orders-table">
-          <thead><tr>
-            <th>Side</th><th>Price</th><th>Size</th><th>Age</th>
-          </tr></thead>
-          <tbody id="orders-body"></tbody>
+  <section class="grid2">
+    <div class="panel">
+      <h3><span>Market Data</span><span class="live-dot"></span></h3>
+      <div class="kv" id="market-kv"></div>
+    </div>
+    <div class="panel">
+      <h3><span>Risk &amp; Kill Switch</span><span class="live-dot"></span></h3>
+      <div class="kv" id="risk-kv"></div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <h3><span>Open Orders</span><span id="orders-count" class="c-dim" style="font-size:11px;"></span></h3>
+      <div class="scroll-y">
+        <table>
+          <thead><tr><th>Side</th><th>Price</th><th>Size</th><th>Age</th></tr></thead>
+          <tbody id="orders-body"><tr class="empty-row"><td colspan="4">No open orders</td></tr></tbody>
         </table>
       </div>
     </div>
-
-    <!-- Recent Fills -->
-    <div class="panel" id="panel-fills">
-      <div class="panel-title">Recent Fills</div>
-      <div class="panel-body">
-        <table class="data-table" id="fills-table">
-          <thead><tr>
-            <th>Time</th><th>Side</th><th>Price</th><th>Size</th><th>Fee</th>
-          </tr></thead>
-          <tbody id="fills-body"></tbody>
+    <div class="panel">
+      <h3><span>Recent Fills</span><span id="fills-count" class="c-dim" style="font-size:11px;"></span></h3>
+      <div class="scroll-y">
+        <table>
+          <thead><tr><th>Time</th><th>Side</th><th>Price</th><th>Size</th><th>Fee</th></tr></thead>
+          <tbody id="fills-body"><tr class="empty-row"><td colspan="5">No fills yet</td></tr></tbody>
         </table>
       </div>
     </div>
+  </section>
 
-  </div><!-- /main-grid -->
+  <section class="panel">
+    <h3><span>Live Log Stream</span><span class="live-dot"></span></h3>
+    <div class="terminal" id="log-body"></div>
+  </section>
 
-  <!-- ── Log pane ───────────────────────────────────────────────── -->
-  <div id="log-panel" class="panel">
-    <div class="panel-title">Log</div>
-    <div id="log-body"></div>
-  </div>
-
-</div><!-- /app -->
+</div>
+<div class="demo-flag" id="demo-flag">⚠ DEMO DATA — connect this page at your bot's /api/state to control the real strategy</div>
 
 <script>
-  // ── Rich markup → HTML spans ──────────────────────────────────────
-  function renderTag(s) {
+  // ══════════════════════════════════════════════════════════════
+  //  Decorative background — drifting node graph (purely cosmetic)
+  // ══════════════════════════════════════════════════════════════
+  (function(){
+    const canvas = document.getElementById('bg-canvas');
+    const ctx = canvas.getContext('2d');
+    let W, H, nodes = [];
+    const COLORS = ['#2dffb0', '#c25bff', '#ffb347'];
+    function resize(){
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+    function init(){
+      resize();
+      const n = Math.min(46, Math.floor((W*H)/45000));
+      nodes = Array.from({length:n}, () => ({
+        x: Math.random()*W, y: Math.random()*H,
+        vx:(Math.random()-0.5)*0.18, vy:(Math.random()-0.5)*0.18,
+        r: Math.random()*1.6+0.6,
+        c: COLORS[Math.floor(Math.random()*COLORS.length)]
+      }));
+    }
+    function step(){
+      ctx.clearRect(0,0,W,H);
+      for(const p of nodes){
+        p.x += p.vx; p.y += p.vy;
+        if(p.x<0||p.x>W) p.vx*=-1;
+        if(p.y<0||p.y>H) p.vy*=-1;
+      }
+      for(let i=0;i<nodes.length;i++){
+        for(let j=i+1;j<nodes.length;j++){
+          const a=nodes[i], b=nodes[j];
+          const d = Math.hypot(a.x-b.x, a.y-b.y);
+          if(d < 130){
+            ctx.strokeStyle = a.c;
+            ctx.globalAlpha = (1 - d/130) * 0.12;
+            ctx.lineWidth = 0.6;
+            ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+      for(const p of nodes){
+        ctx.beginPath();
+        ctx.fillStyle = p.c;
+        ctx.shadowColor = p.c; ctx.shadowBlur = 8;
+        ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+      requestAnimationFrame(step);
+    }
+    window.addEventListener('resize', resize);
+    init(); step();
+  })();
+
+  // ══════════════════════════════════════════════════════════════
+  //  3D tilt interaction on hero cards
+  // ══════════════════════════════════════════════════════════════
+  document.querySelectorAll('.tilt-card').forEach(card => {
+    card.addEventListener('mousemove', e => {
+      const r = card.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - 0.5;
+      const py = (e.clientY - r.top) / r.height - 0.5;
+      card.style.transform = `rotateX(${(-py*7).toFixed(2)}deg) rotateY(${(px*9).toFixed(2)}deg) translateZ(6px)`;
+    });
+    card.addEventListener('mouseleave', () => { card.style.transform = ''; });
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  //  Formatting helpers (mirrors the bot's own rich-tag conventions)
+  // ══════════════════════════════════════════════════════════════
+  function renderTag(s){
     return s.replace(/\[(\/?)([\w\s]+)\]/g, (m, close, tag) =>
-      close ? '</span>' : `<span class="tag-${tag.trim().replace(/\s+/g, '-')}">`
+      close ? '</span>' : `<span class="tag-${tag.trim().replace(/\s+/g,'-')}">`
     );
   }
-
-  // ── Formatting helpers ────────────────────────────────────────────
-  function fmt(v, decimals = 2) {
-    if (v === null || v === undefined) return '—';
-    return Number(v).toLocaleString('en-US', {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-    });
+  function fmt(v, d=2){
+    if (v===null||v===undefined) return '—';
+    return Number(v).toLocaleString('en-US',{minimumFractionDigits:d, maximumFractionDigits:d});
   }
-
-  function fmtAge(s) {
-    if (s < 60) return `${Math.round(s)}s`;
-    return `${(s / 60).toFixed(1)}m`;
-  }
-
-  function fmtUptime(secs) {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = Math.floor(secs % 60);
+  function fmtAge(s){ return s<60 ? `${Math.round(s)}s` : `${(s/60).toFixed(1)}m`; }
+  function fmtUptime(secs){
+    const h=Math.floor(secs/3600), m=Math.floor((secs%3600)/60), s=Math.floor(secs%60);
     return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   }
-
-  function pnlClass(v) {
-    return v > 0 ? 'c-green' : v < 0 ? 'c-red' : 'c-dim';
+  function pnlClass(v){ return v>0?'c-green':v<0?'c-red':'c-dim'; }
+  function pnlStr(v){ if(v==null) return '—'; return `${v>0?'+':''}${fmt(v,4)}`; }
+  function kvRows(pairs){
+    return pairs.map(([l,v]) => `<span class="kv-label">${l}</span><span class="kv-val">${v}</span>`).join('');
   }
-
-  function pnlStr(v) {
-    if (v === null || v === undefined) return '—';
-    const sign = v > 0 ? '+' : '';
-    return `${sign}${fmt(v, 4)}`;
-  }
-
-  // ── KV row builder ────────────────────────────────────────────────
-  function kvRows(pairs) {
-    return pairs.map(([label, valHtml]) =>
-      `<span class="kv-label">${label}</span><span class="kv-val">${valHtml}</span>`
-    ).join('');
-  }
-
-  // ── Inventory progress bar ────────────────────────────────────────
-  function invBar(pct) {
-    const cls = pct < 50 ? 'bar-green' : pct < 80 ? 'bar-yellow' : 'bar-red';
-    const w = Math.min(pct, 100).toFixed(1);
-    return `<div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${w}%"></div></div>`;
-  }
-
-  // ── Drawdown bar ──────────────────────────────────────────────────
-  function ddBar(dd, max) {
-    const pct = max > 0 ? Math.min((dd / max) * 100, 100) : 0;
-    const cls = pct < 40 ? 'bar-green' : pct < 80 ? 'bar-yellow' : 'bar-red';
-    return `<div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${pct.toFixed(1)}%"></div></div>`;
-  }
-
-  // ── Sparkline ─────────────────────────────────────────────────────
-  function updateSparkline(prices) {
+  function sideBadge(side){ return side==='buy' ? '<span class="side-buy">BUY</span>' : '<span class="side-sell">SELL</span>'; }
+  function updateSparkline(prices){
     const line = document.getElementById('spark-line');
-    if (!prices || prices.length < 2) { line.setAttribute('points', ''); return; }
-    const mn = Math.min(...prices);
-    const mx = Math.max(...prices);
-    const range = mx - mn || 1;
-    const W = 300, H = 44, PAD = 2;
-    const pts = prices.map((p, i) => {
-      const x = (i / (prices.length - 1)) * W;
-      const y = PAD + (1 - (p - mn) / range) * (H - PAD * 2);
+    if(!prices || prices.length<2){ line.setAttribute('points',''); return; }
+    const mn=Math.min(...prices), mx=Math.max(...prices), range=(mx-mn)||1;
+    const Wd=300, Hd=44, PAD=2;
+    const pts = prices.map((p,i)=>{
+      const x=(i/(prices.length-1))*Wd;
+      const y=PAD+(1-(p-mn)/range)*(Hd-PAD*2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
     line.setAttribute('points', pts.join(' '));
   }
-
-  // ── Side badge ────────────────────────────────────────────────────
-  function sideBadge(side) {
-    return side === 'buy'
-      ? '<span class="side-buy">BUY</span>'
-      : '<span class="side-sell">SELL</span>';
-  }
-
-  // ── Connection badge ──────────────────────────────────────────────
-  function setConnectionBadge(ok) {
-    const el = document.getElementById('conn-badge');
-    if (ok) { el.textContent = 'LIVE'; el.className = 'live'; }
-    else     { el.textContent = 'DISCONNECTED'; el.className = 'disc'; }
-  }
-
-  // ── Log pane (kept separate — append-only for perf) ───────────────
   let _lastLogLen = 0;
-  function updateLog(logLines) {
-    if (!logLines || logLines.length === _lastLogLen) return;
+  function updateLog(lines){
+    if(!lines) return;
+    if(lines.length < _lastLogLen) _lastLogLen = 0; // log source reset (e.g. bot restarted)
+    if(lines.length === _lastLogLen) return;
     const body = document.getElementById('log-body');
-    const newLines = logLines.slice(_lastLogLen);
-    _lastLogLen = logLines.length;
+    const newLines = lines.slice(_lastLogLen);
+    _lastLogLen = lines.length;
     const frag = document.createDocumentFragment();
-    newLines.forEach(entry => {
+    newLines.forEach(entry=>{
       const div = document.createElement('div');
-      div.className = 'log-line';
+      div.className='log-line';
       div.innerHTML = `<span class="log-ts">${entry.ts}</span><span class="log-msg">${renderTag(entry.message)}</span>`;
       frag.appendChild(div);
     });
@@ -500,134 +445,177 @@
     body.scrollTop = body.scrollHeight;
   }
 
-  // ── Main render ───────────────────────────────────────────────────
-  function render(d) {
-    // Header
+  // ══════════════════════════════════════════════════════════════
+  //  Main render
+  // ══════════════════════════════════════════════════════════════
+  let stopRequested = false;
+
+  function render(d){
     document.getElementById('h-symbol').textContent = d.symbol || '—';
     document.getElementById('h-mode').textContent   = d.strategy_mode || '—';
-    document.getElementById('h-uptime').textContent = fmtUptime(d.uptime_seconds || 0);
-    document.getElementById('h-iter').textContent   = (d.iteration || 0).toLocaleString();
+    document.getElementById('h-uptime').textContent = fmtUptime(d.uptime_seconds||0);
+    document.getElementById('h-iter').textContent   = (d.iteration||0).toLocaleString();
 
     const rb = document.getElementById('regime-badge');
-    const regime = (d.regime || 'unknown').toLowerCase();
-    rb.textContent  = regime.toUpperCase();
-    rb.className    = regime === 'trend' ? 'trend' : regime === 'range' ? 'range' : 'unknown';
+    const regime = (d.regime||'unknown').toLowerCase();
+    rb.textContent = regime.toUpperCase();
+    rb.className = 'badge ' + (regime==='trend' ? 'trend' : regime==='range' ? 'range' : 'unknown');
+
+    const ctrl = d.control || {session_mode:'live', stop_requested:false};
+    stopRequested = !!ctrl.stop_requested;
+    const chip = document.getElementById('session-chip');
+    chip.textContent = (ctrl.session_mode||'live').toUpperCase();
+    chip.className = 'session-chip ' + (ctrl.session_mode==='backtest' ? 'backtest' : 'live');
+
+    const stopBtn = document.getElementById('stop-btn');
+    if(!stopBtn.dataset.busy){
+      stopBtn.className = 'stopbtn ' + (stopRequested ? 'stopped' : 'running');
+      stopBtn.textContent = stopRequested ? '▶ Resume Bot' : '■ Stop Bot';
+    }
+    document.getElementById('stopped-banner').classList.toggle('active', stopRequested);
 
     // Market
     const mkt = d.market;
     updateSparkline(mkt ? mkt.price_history : null);
-    document.getElementById('market-kv').innerHTML = kvRows(
-      mkt ? [
-        ['Mid Price',  `<strong>${fmt(mkt.mid_price, 2)}</strong>`],
-        ['Microprice', fmt(mkt.microprice, 2)],
-        ['Spread',     fmt(mkt.spread, 4)],
-        ['Best Bid',   `<span class="c-green">${fmt(mkt.best_bid, 2)}</span> <span class="c-dim">(${fmt(mkt.best_bid_size, 4)})</span>`],
-        ['Best Ask',   `<span class="c-red">${fmt(mkt.best_ask, 2)}</span> <span class="c-dim">(${fmt(mkt.best_ask_size, 4)})</span>`],
-        ['Volatility', fmt(mkt.volatility, 6)],
-        ['Imbalance',  (() => { const v = mkt.imbalance; return `<span class="${pnlClass(v)}">${fmt(v,4)}</span>`; })()],
-        ['Latency',    `${fmt(mkt.latency_ms, 0)} ms`],
-        ['Data',       mkt.is_stale ? '<span class="pill pill-stale">STALE</span>' : '<span class="pill pill-live">LIVE</span>'],
-      ] : [
-        ['Status', '<span class="c-yellow">Waiting for data...</span>'],
-      ]
-    );
+    document.getElementById('hero-price').textContent = mkt ? fmt(mkt.mid_price,2) : '—';
+    document.getElementById('hero-spread').textContent = mkt ? fmt(mkt.spread,4) : '—';
+    document.getElementById('hero-latency').textContent = mkt ? `${fmt(mkt.latency_ms,0)}ms` : '—';
+    document.getElementById('hero-data-pill').innerHTML = mkt
+      ? (mkt.is_stale ? '<span class="pill pill-stale">STALE</span>' : '<span class="pill pill-live">LIVE</span>')
+      : '';
+    document.getElementById('market-kv').innerHTML = kvRows(mkt ? [
+      ['Mid Price', `<strong>${fmt(mkt.mid_price,2)}</strong>`],
+      ['Microprice', fmt(mkt.microprice,2)],
+      ['Spread', fmt(mkt.spread,4)],
+      ['Best Bid', `<span class="c-green">${fmt(mkt.best_bid,2)}</span> <span class="c-dim">(${fmt(mkt.best_bid_size,4)})</span>`],
+      ['Best Ask', `<span class="c-red">${fmt(mkt.best_ask,2)}</span> <span class="c-dim">(${fmt(mkt.best_ask_size,4)})</span>`],
+      ['Volatility', fmt(mkt.volatility,6)],
+      ['Imbalance', `<span class="${pnlClass(mkt.imbalance)}">${fmt(mkt.imbalance,4)}</span>`],
+      ['Latency', `${fmt(mkt.latency_ms,0)} ms`],
+    ] : [['Status','<span class="c-yellow">Waiting for data…</span>']]);
 
-    // Position
+    // Position / P&L
     const pos = d.position || {};
-    const inv = pos.inventory || 0;
-    const invPct = pos.inventory_pct || 0;
-    const invCls = invPct < 50 ? 'c-green' : invPct < 80 ? 'c-yellow' : 'c-red';
-    const realPnl = pos.realized_pnl || 0;
-    const unrealPnl = pos.unrealized_pnl || 0;
-    const totalPnl = realPnl + unrealPnl;
-    document.getElementById('position-kv').innerHTML = kvRows([
-      ['Inventory',
-        `<span class="${invCls}">${inv >= 0 ? '+' : ''}${fmt(inv,6)}</span>` +
-        invBar(invPct) +
-        `<span class="${invCls} c-dim" style="font-size:11px">${invPct.toFixed(1)}%</span>`],
-      ['Avg Entry',  pos.avg_entry_price > 0 ? fmt(pos.avg_entry_price, 2) : '<span class="c-dim">—</span>'],
-      ['Realized',   `<span class="${pnlClass(realPnl)}">${pnlStr(realPnl)}</span>`],
-      ['Unrealized', `<span class="${pnlClass(unrealPnl)}">${pnlStr(unrealPnl)}</span>`],
-      ['Total P&L',  `<span class="${pnlClass(totalPnl)}">${pnlStr(totalPnl)}</span>`],
-      ['Bid VWAP',   pos.bid_vwap > 0 ? fmt(pos.bid_vwap, 2) : '<span class="c-dim">—</span>'],
-      ['Ask VWAP',   pos.ask_vwap > 0 ? fmt(pos.ask_vwap, 2) : '<span class="c-dim">—</span>'],
-    ]);
+    const inv = pos.inventory||0, invPct = pos.inventory_pct||0;
+    const realPnl = pos.realized_pnl||0, unrealPnl = pos.unrealized_pnl||0, totalPnl = realPnl+unrealPnl;
+    document.getElementById('hero-pnl').textContent = pnlStr(totalPnl);
+    document.getElementById('hero-pnl').className = 'big ' + (totalPnl>=0?'mint':'red');
+    document.getElementById('hero-realized').textContent = pnlStr(realPnl);
+    document.getElementById('hero-unrealized').textContent = pnlStr(unrealPnl);
+    document.getElementById('hero-bidvwap').textContent = pos.bid_vwap>0 ? fmt(pos.bid_vwap,2) : '—';
+    document.getElementById('hero-askvwap').textContent = pos.ask_vwap>0 ? fmt(pos.ask_vwap,2) : '—';
+
+    document.getElementById('hero-inv').textContent = `${inv>=0?'+':''}${fmt(inv,6)}`;
+    document.getElementById('hero-inv').className = 'big ' + (invPct<50?'mint':invPct<80?'':'red');
+    document.getElementById('hero-invpct').textContent = `${invPct.toFixed(1)}%`;
+    document.getElementById('hero-entry').textContent = pos.avg_entry_price>0 ? fmt(pos.avg_entry_price,2) : '—';
+    const gauge = document.getElementById('inv-gauge');
+    gauge.style.width = `${Math.min(invPct,100).toFixed(1)}%`;
+    gauge.className = 'gauge-fill ' + (invPct<50?'g':invPct<80?'y':'r');
 
     // Risk
     const risk = d.risk || {};
-    const dd    = risk.drawdown_pct || 0;
-    const maxDd = risk.max_drawdown_pct || 0.05;
-    const ddCls = dd < 0.02 ? 'c-green' : dd < 0.04 ? 'c-yellow' : 'c-red';
+    const dd = risk.drawdown_pct||0, maxDd = risk.max_drawdown_pct||0.05;
+    const ddPct = maxDd>0 ? Math.min((dd/maxDd)*100,100) : 0;
+    const ddCls = ddPct<40?'bar-green':ddPct<80?'bar-yellow':'bar-red';
     document.getElementById('risk-kv').innerHTML = kvRows([
-      ['Drawdown',
-        `<span class="${ddCls}">${(dd * 100).toFixed(2)}%</span> / ${(maxDd * 100).toFixed(2)}%` +
-        ddBar(dd, maxDd)],
-      ['Kill Switch', risk.kill_switch_active
-        ? `<span class="c-red" style="font-weight:700">ACTIVE</span>`
-        : `<span class="c-green">OFF</span>`],
-      ...(risk.kill_switch_active && risk.kill_switch_reason
-        ? [['Reason', `<span class="c-red">${risk.kill_switch_reason}</span>`]]
-        : []),
+      ['Drawdown', `<span class="${dd<maxDd*0.4?'c-green':dd<maxDd*0.8?'c-yellow':'c-red'}">${(dd*100).toFixed(2)}%</span> / ${(maxDd*100).toFixed(2)}%<div class="bar-wrap"><div class="bar-fill ${ddCls}" style="width:${ddPct.toFixed(1)}%"></div></div>`],
+      ['Kill Switch', risk.kill_switch_active ? '<span class="c-red" style="font-weight:700">ACTIVE</span>' : '<span class="c-green">OFF</span>'],
+      ...(risk.kill_switch_active && risk.kill_switch_reason ? [['Reason', `<span class="c-red">${risk.kill_switch_reason}</span>`]] : []),
     ]);
-
-    const banner = document.getElementById('kill-banner');
-    if (risk.kill_switch_active) {
-      banner.classList.add('active');
-      banner.textContent = `KILL SWITCH ACTIVE${risk.kill_switch_reason ? ' — ' + risk.kill_switch_reason : ''}`;
-    } else {
-      banner.classList.remove('active');
-    }
+    const killBanner = document.getElementById('kill-banner');
+    if(risk.kill_switch_active){
+      killBanner.classList.add('active');
+      document.getElementById('kill-text').textContent = `KILL SWITCH ACTIVE${risk.kill_switch_reason ? ' — '+risk.kill_switch_reason : ''}`;
+    } else killBanner.classList.remove('active');
 
     // Orders
     const orders = d.orders || [];
-    const obody = document.getElementById('orders-body');
-    if (orders.length === 0) {
-      obody.innerHTML = '<tr class="empty-row"><td colspan="4">No open orders</td></tr>';
-    } else {
-      obody.innerHTML = orders.map(o =>
-        `<tr>
-          <td>${sideBadge(o.side)}</td>
-          <td>${fmt(o.price, 2)}</td>
-          <td>${fmt(o.size, 6)}</td>
-          <td class="c-dim">${fmtAge(o.age_seconds)}</td>
-        </tr>`
-      ).join('');
-    }
+    document.getElementById('orders-count').textContent = orders.length ? `${orders.length} open` : '';
+    document.getElementById('orders-body').innerHTML = orders.length
+      ? orders.map(o=>`<tr><td>${sideBadge(o.side)}</td><td>${fmt(o.price,2)}</td><td>${fmt(o.size,6)}</td><td class="c-dim">${fmtAge(o.age_seconds)}</td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="4">No open orders</td></tr>';
 
     // Fills
     const fills = d.fills || [];
-    const fbody = document.getElementById('fills-body');
-    if (fills.length === 0) {
-      fbody.innerHTML = '<tr class="empty-row"><td colspan="5">No fills yet</td></tr>';
-    } else {
-      fbody.innerHTML = [...fills].reverse().map(f =>
-        `<tr>
-          <td class="c-dim">${f.time}</td>
-          <td>${sideBadge(f.side)}</td>
-          <td>${fmt(f.price, 2)}</td>
-          <td>${fmt(f.size, 6)}</td>
-          <td class="c-dim">${fmt(f.fee, 6)}</td>
-        </tr>`
-      ).join('');
-    }
+    document.getElementById('fills-count').textContent = fills.length ? `${fills.length} recent` : '';
+    document.getElementById('fills-body').innerHTML = fills.length
+      ? [...fills].reverse().map(f=>`<tr><td class="c-dim">${f.time}</td><td>${sideBadge(f.side)}</td><td>${fmt(f.price,2)}</td><td>${fmt(f.size,6)}</td><td class="c-dim">${fmt(f.fee,6)}</td></tr>`).join('')
+      : '<tr class="empty-row"><td colspan="5">No fills yet</td></tr>';
 
-    // Log
     updateLog(d.log);
   }
 
-  // ── Polling loop ──────────────────────────────────────────────────
-  async function tick() {
-    try {
-      const res  = await fetch('/api/state');
+  // ══════════════════════════════════════════════════════════════
+  //  Stop / Resume control — posts to the bot's own control API
+  // ══════════════════════════════════════════════════════════════
+  document.getElementById('stop-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('stop-btn');
+    btn.dataset.busy = '1';
+    btn.disabled = true;
+    const goingToStop = !stopRequested;
+    btn.textContent = goingToStop ? 'Stopping…' : 'Resuming…';
+    try{
+      const res = await fetch(goingToStop ? '/api/control/stop' : '/api/control/resume', { method:'POST' });
+      if(!res.ok) throw new Error('request failed');
+    }catch(e){
+      // No live backend reachable (e.g. previewing this file standalone) —
+      // flip local demo state so the UI still reflects the action.
+      stopRequested = goingToStop;
+      document.getElementById('demo-flag').classList.add('show');
+    }
+    delete btn.dataset.busy;
+    btn.disabled = false;
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  //  Poll loop with offline demo-data fallback
+  // ══════════════════════════════════════════════════════════════
+  function setConnectionBadge(ok){
+    const el = document.getElementById('conn-badge');
+    if(ok){ el.textContent='LIVE'; el.className='live'; document.getElementById('demo-flag').classList.remove('show'); }
+    else   { el.textContent='DISCONNECTED'; el.className='disc'; }
+  }
+
+  let demoPrice = 64500, demoHist = [], demoIter = 0, demoLog = [];
+  function demoSnapshot(){
+    demoIter++;
+    demoPrice += (Math.random()-0.5)*18;
+    demoHist.push(demoPrice); if(demoHist.length>200) demoHist.shift();
+    if(Math.random()<0.12){
+      const tags=['[green]Fill: buy 0.0021 @ '+demoPrice.toFixed(2)+'[/]','[yellow]Quoting paused: spread widened[/]','[dim]Reconciled open orders[/]'];
+      demoLog.push({ts:new Date().toLocaleTimeString('en-GB'), message:tags[Math.floor(Math.random()*tags.length)]});
+      if(demoLog.length>60) demoLog.shift();
+    }
+    document.getElementById('demo-flag').classList.add('show');
+    return {
+      symbol:'BTC/USDT', strategy_mode:'avellaneda-stoikov', uptime_seconds:demoIter*0.5, iteration:demoIter,
+      regime: Math.random()>0.5?'range':'trend',
+      control:{session_mode:'live', stop_requested: stopRequested},
+      market:{ mid_price:demoPrice, microprice:demoPrice+0.3, spread:1.2+Math.random(), best_bid:demoPrice-0.6,
+        best_bid_size:0.42, best_ask:demoPrice+0.6, best_ask_size:0.38, volatility:0.00042, imbalance:(Math.random()-0.5)*0.6,
+        latency_ms:80+Math.random()*40, is_stale:false, price_history:demoHist.slice() },
+      position:{ inventory:0.014, inventory_pct:28, avg_entry_price:demoPrice-40, realized_pnl:212.4, unrealized_pnl:38.2, bid_vwap:demoPrice-12, ask_vwap:demoPrice+9 },
+      risk:{ drawdown_pct:0.008, max_drawdown_pct:0.05, kill_switch_active:false, kill_switch_reason:'' },
+      orders:[ {side:'buy', price:demoPrice-4, size:0.02, age_seconds:12, order_id:'d1'}, {side:'sell', price:demoPrice+5, size:0.018, age_seconds:34, order_id:'d2'} ],
+      fills:[ {time:new Date().toLocaleTimeString('en-GB'), side:'buy', price:demoPrice-6, size:0.011, fee:0.0004} ],
+      log: demoLog.slice(),
+    };
+  }
+
+  async function tick(){
+    try{
+      const res = await fetch('/api/state');
+      if(!res.ok) throw new Error('bad status');
       const data = await res.json();
       setConnectionBadge(true);
       render(data);
-    } catch (e) {
+    }catch(e){
       setConnectionBadge(false);
+      render(demoSnapshot());
     }
-    setTimeout(tick, 500);
+    setTimeout(tick, 600);
   }
-
   tick();
 </script>
 </body>

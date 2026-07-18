@@ -11,8 +11,9 @@
 - **การจัดการความเสี่ยง (Risk Management)**: ระบบตัดการทำงาน (Kill-switch) เมื่อขาดทุนเกินกำหนด (Drawdown), ตรวจสอบระยะห่างจากราคา Liquidate, และการจำกัดความถี่ในการส่งคำสั่ง
 - **การตรวจจับการจับคู่คำสั่ง (Fill Detection)**: ตรวจสอบแบบ Polling ด้วย REST API พร้อมติดตามราคา VWAP และการบันทึกกำไร/ขาดทุนอย่างถูกต้อง
 - **การตรวจจับสภาวะตลาด (Regime Detection)**: ใช้จุดตัด EMA, RSI, และความชันของราคาเพื่อจำแนกสภาวะตลาดแบบมีเทรนด์ (Trend) หรือแบบแกว่งตัว (Range)
-- **Dashboard แสดงผลแบบสด**: แสดงข้อมูลบนเว็บเพจที่ทำงานที่ Localhost (ปรับปรุงจาก Terminal UI เดิม) พร้อมข้อมูลตลาด, P&L, ออเดอร์, Fills, และค่าความเสี่ยงต่างๆ
+- **Dashboard แสดงผลแบบสด**: แสดงข้อมูลบนเว็บเพจที่ทำงานที่ Localhost พร้อมข้อมูลตลาด, P&L, ออเดอร์, Fills, ค่าความเสี่ยงต่างๆ และปุ่มควบคุมสั่งหยุด/เริ่มการทำงาน (Stop/Resume) ได้จากหน้าเว็บ
 - **การกู้คืนระบบ (Crash Recovery)**: บันทึกสถานะลงไฟล์ JSON อย่างต่อเนื่องเพื่อการรีสตาร์ทบอทอย่างปลอดภัย
+- **Hyperparameter Optimization**: มาพร้อมกับสคริปต์สำหรับการค้นหาค่าพารามิเตอร์ที่เหมาะสมที่สุด (Optuna) ผ่านข้อมูลตลาดจำลอง (Synthetic Data)
 
 ## การทำงานของบอท (Trading Logic) แบบละเอียด
 
@@ -80,9 +81,9 @@ python main.py
 ```
 *(เมื่อรันบอท หน้าจอ Dashboard จะถูกเปิดขึ้นมาบน Browser อัตโนมัติที่ `http://127.0.0.1:8765`)*
 
-## ระบบ Backtest และ Stress-Test (ออฟไลน์)
+## ระบบ Backtest, Stress-Test และ Optimization (ออฟไลน์)
 
-บอทมาพร้อมกับระบบ Backtest แบบออฟไลน์ที่แยกส่วนออกมา (`backtest/`) โดยไม่ยุ่งเกี่ยวกับโค้ด Production เดิม ระบบนี้สามารถสร้างข้อมูลตลาดจำลอง (Synthetic Data) แบบสุ่มและทดสอบบอทในสภาวะตลาดแบบต่างๆ เช่น ความผันผวนสูง (High Volatility) หรือตลาดพัง (Crash)
+บอทมาพร้อมกับระบบ Backtest แบบออฟไลน์ที่แยกส่วนออกมา (`backtest/`) โดยไม่ยุ่งเกี่ยวกับโค้ด Production เดิม ระบบนี้สามารถสร้างข้อมูลตลาดจำลอง (Synthetic Data) แบบสุ่มและทดสอบบอทในสภาวะตลาดแบบต่างๆ เช่น ความผันผวนสูง (High Volatility) หรือตลาดพัง (Crash) รวมไปถึงระบบค้นหาค่าพารามิเตอร์ที่ดีที่สุด (Hyperparameter Optimization)
 
 **คำสั่งรันระบบ Backtest:**
 
@@ -95,6 +96,9 @@ python main.py
 
 # รัน Agent Loop (รันจนกว่าจะผ่านเกณฑ์ 20 รอบติดกัน)
 .\myenv\Scripts\python.exe -W ignore -m backtest.agent_loop
+
+# ค้นหาค่าพารามิเตอร์ที่ดีที่สุดด้วย Optuna (Hyperparameter Optimization)
+.\myenv\Scripts\python.exe -m backtest.optimize --n-trials 100 --n-seeds 3
 ```
 
 ## การตั้งค่า (Configuration)

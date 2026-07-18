@@ -22,6 +22,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 import sys
 import os
 import time
@@ -39,6 +40,9 @@ from quote_engine import QuoteEngine
 from regime_detector import RegimeDetector
 from risk_manager import RiskManager
 from backtest.matching_engine import MatchingEngine
+
+if TYPE_CHECKING:
+    from dashboard_state import DashboardState
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +128,11 @@ class BacktestRunner:
         self.cfg = config if config is not None else load_config()
         self.market_info = market_info if market_info is not None else dict(_DEFAULT_MARKET_INFO)
 
-    def run(self, ticks: list[dict]) -> BacktestResult:
+    def run(
+        self,
+        ticks: list[dict],
+        dashboard_state: DashboardState | None = None,
+    ) -> BacktestResult:
         """Run a full backtest over the given tick sequence.
 
         Parameters
@@ -133,6 +141,10 @@ class BacktestRunner:
             CCXT-format order book dicts (from any synthetic_data generator).
             Must have at least ``regime_slow_ema_span + rsi_period`` ticks
             to allow regime detector to warm up.
+        dashboard_state : DashboardState | None
+            Optional shared state object.  When provided the runner checks
+            ``is_stop_requested()`` every tick and breaks cleanly if the
+            dashboard user presses Stop.
 
         Returns
         -------
@@ -163,6 +175,14 @@ class BacktestRunner:
         for tick in ticks:
             iteration += 1
             result.total_ticks += 1
+
+            # ── Dashboard stop check ──────────────────────────────────────
+            if dashboard_state is not None and dashboard_state.is_stop_requested():
+                logger.info(
+                    "Backtest stopped from dashboard at tick %d / %d",
+                    iteration, len(ticks),
+                )
+                break
 
             # ── Step 1: Refresh market state ──────────────────────────────
             ms.update_from_orderbook(tick)

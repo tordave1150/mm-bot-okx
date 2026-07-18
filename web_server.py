@@ -35,6 +35,25 @@ def build_app(state: DashboardState) -> FastAPI:
     def get_state() -> dict:
         return state.get_snapshot()
 
+    # ── Stop / Resume control ────────────────────────────────────────
+
+    @app.post("/api/control/stop", response_class=JSONResponse)
+    def control_stop() -> dict:
+        state.request_stop()
+        logger.info("Bot stop requested via dashboard")
+        return {"ok": True, "action": "stop"}
+
+    @app.post("/api/control/resume", response_class=JSONResponse)
+    def control_resume() -> dict:
+        state.clear_stop()
+        logger.info("Bot resume requested via dashboard")
+        return {"ok": True, "action": "resume"}
+
+    @app.get("/api/control/status", response_class=JSONResponse)
+    def control_status() -> dict:
+        snap = state.get_snapshot()
+        return snap.get("control", {"session_mode": "live", "stop_requested": False})
+
     return app
 
 

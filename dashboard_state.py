@@ -23,13 +23,34 @@ class DashboardState:
     browser.  A single ``threading.Lock`` protects all shared state.
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, session_mode: str = "live"):
         self.cfg = config
         self._lock = threading.Lock()
         self._start_time = time.time()
         self._iteration_count = 0
         self._log_lines: deque[dict] = deque(maxlen=config.dashboard_log_lines)
         self._snapshot: dict[str, Any] = {}
+        self._session_mode: str = session_mode  # "live" or "backtest"
+        self._stop_requested: bool = False
+
+    # ── Stop / Resume control ───────────────────────────────────────────
+
+    def request_stop(self) -> None:
+        """Request the bot to pause quoting (called from web API)."""
+        with self._lock:
+            self._stop_requested = True
+
+    def clear_stop(self) -> None:
+        """Resume the bot after a stop request (called from web API)."""
+        with self._lock:
+            self._stop_requested = False
+
+    def is_stop_requested(self) -> bool:
+        """Check whether a stop has been requested (called from strategy loop)."""
+        with self._lock:
+            return self._stop_requested
+
+    # ── Logging ────────────────────────────────────────────────────────────
 
     def add_log(self, message: str) -> None:
         """Append a timestamped message to the log ring buffer."""
@@ -58,6 +79,10 @@ class DashboardState:
             snap["log"] = list(self._log_lines)
             snap["uptime_seconds"] = time.time() - self._start_time
             snap["iteration"] = self._iteration_count
+            snap["control"] = {
+                "session_mode": self._session_mode,
+                "stop_requested": self._stop_requested,
+            }
             return snap
 
     def _build_snapshot(self, kw: dict) -> dict:

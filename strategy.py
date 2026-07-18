@@ -107,7 +107,20 @@ class AvellanedaMarketMaker(Strategy):
         """Main trading loop — called every ``sleeptime`` seconds."""
         self._iteration += 1
 
-        # ── 0. Ensure exchange handle ───────────────────────────────────
+        # ── 0a. Dashboard stop check (pause, not kill) ──────────────────
+        if self.dashboard_state.is_stop_requested():
+            if self._exchange:
+                try:
+                    self.order_manager.cancel_all(self._exchange, self.cfg.symbol)
+                except Exception:
+                    logger.exception("Error cancelling orders during stop")
+            self.dashboard_state.add_log(
+                "[yellow]⏸ Quoting paused — stopped from dashboard[/]"
+            )
+            self._update_dashboard([])
+            return
+
+        # ── 0b. Ensure exchange handle ──────────────────────────────────
         if self._exchange is None:
             self._init_exchange()
             if self._exchange is None:
