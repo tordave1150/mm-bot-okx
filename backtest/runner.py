@@ -70,6 +70,10 @@ class BacktestResult:
     ask_fills: int = 0
     total_ticks: int = 0
 
+    # Fees
+    total_fees: float = 0.0
+    total_realized_pnl: float = 0.0
+
     # Inventory breach counter (>80% of max_inventory)
     ticks_over_80pct_inventory: int = 0
 
@@ -86,6 +90,7 @@ class BacktestResult:
             f"Ticks={self.total_ticks} | "
             f"FinalEquity={final_equity:.2f} | "
             f"MaxDD={max_dd:.2%} | "
+            f"Fees={self.total_fees:.4f} | "
             f"KillSwitch={self.kill_switch_count} | "
             f"BidFills={self.bid_fills} | AskFills={self.ask_fills}"
         )
@@ -118,15 +123,19 @@ class BacktestRunner:
     market_info : dict | None
         Exchange market info dict (tick_size, lot_size, etc.).
         Defaults to ``_DEFAULT_MARKET_INFO`` (BTC/USDT perp).
+    fill_mode : str
+        Matching engine fill mode: "optimistic", "probabilistic", "conservative".
     """
 
     def __init__(
         self,
         config: Config | None = None,
         market_info: dict | None = None,
+        fill_mode: str = "optimistic",
     ) -> None:
         self.cfg = config if config is not None else load_config()
         self.market_info = market_info if market_info is not None else dict(_DEFAULT_MARKET_INFO)
+        self.fill_mode = fill_mode
 
     def run(
         self,
@@ -165,7 +174,11 @@ class BacktestRunner:
         quote_engine = QuoteEngine(self.cfg)
         risk_manager = RiskManager(self.cfg)
         fill_tracker = FillTracker(self.cfg)
-        matching_engine = MatchingEngine()
+        matching_engine = MatchingEngine(
+            fill_mode=self.fill_mode,
+            maker_fee_rate=self.cfg.maker_fee_rate,
+            taker_fee_rate=self.cfg.taker_fee_rate,
+        )
 
         prev_bid_order_id: str | None = None
         prev_ask_order_id: str | None = None
@@ -295,8 +308,8 @@ class BacktestRunner:
                 result.ticks_over_80pct_inventory += 1
 
         # ── Post-run stats ────────────────────────────────────────────────
-        result.bid_fills = matching_engine.total_bid_fills
-        result.ask_fills = matching_engine.total_ask_fills
+        result.total_fees = matching_engine.total_fees
+        result.total_realized_pnl = fill_tracker.realized_pnl
 
         logger.info("Backtest complete: %s", result.summary())
         return result

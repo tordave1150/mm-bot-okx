@@ -1,0 +1,211 @@
+2026-07-18 23:37:35,142 [ERROR] state_persistence: Corrupted state file bot_state.json: Expecting value: line 1 column 1 (char 0) — starting fresh
+2026-07-18 23:37:38,320 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:37:40,739 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:37:43,311 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:37:45,709 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:37:47,377 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:37:49,966 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:37:52,478 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:40:13,026 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:40:15,359 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:40:18,108 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:40:19,724 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:40:21,881 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:40:24,062 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:40:26,646 [ERROR] trading_bot: Failed to initialise exchange
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\trading_bot.py", line 275, in _init_exchange
+    self._exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'
+2026-07-18 23:41:03,624 [ERROR] market_spec: Failed to build MarketSpec for BTC/USDT:USDT; using defaults
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\repo\bot-trade\market_spec.py", line 224, in build_market_spec
+    exchange.load_markets()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 1721, in load_markets
+    return self.set_markets(markets, currencies)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 3641, in set_markets
+    marketsSortedById = self.keysort(self.markets_by_id)
+  File "C:\Users\User\anaconda3\Lib\site-packages\ccxt\base\exchange.py", line 985, in keysort
+    return collections.OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))
+                                   ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'NoneType' and 'str'

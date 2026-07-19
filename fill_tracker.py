@@ -66,6 +66,11 @@ class FillTracker:
     # ── Public API ──────────────────────────────────────────────────────
 
     @property
+    def known_fill_ids(self) -> set[str]:
+        """Return the set of known fill IDs (for state persistence)."""
+        return self._known_fill_ids
+
+    @property
     def bid_vwap(self) -> float:
         if self._bid_vwap_denom == 0:
             return 0.0
@@ -168,6 +173,26 @@ class FillTracker:
         self._process_fill(fill)
         return fill
 
+    def process_fill(self, fill: Fill) -> None:
+        """Process a fill — public API for backtest matching engine."""
+        self._process_fill(fill)
+
+    def restore_state(
+        self,
+        known_fill_ids: set[str],
+        realized_pnl: float,
+        position: float,
+        avg_entry_price: float,
+    ) -> None:
+        """Restore tracker state from persisted data.
+
+        Called on startup after loading state from disk.
+        """
+        self._known_fill_ids = known_fill_ids
+        self.realized_pnl = realized_pnl
+        self._position = position
+        self._avg_entry_price = avg_entry_price
+
     def compute_unrealized_pnl(self, mid_price: float) -> float:
         """Mark-to-market unrealized P&L on current position."""
         if self._position == 0 or self._avg_entry_price == 0:
@@ -201,6 +226,8 @@ class FillTracker:
         if old_pos == 0:
             # Opening new position
             self._avg_entry_price = fill.price
+            # Deduct fee from realized P&L on opening (AGENTS.md §11.2)
+            self.realized_pnl -= fill.fee
         elif (old_pos > 0 and fill.side == "buy") or (
             old_pos < 0 and fill.side == "sell"
         ):
@@ -209,6 +236,8 @@ class FillTracker:
             self._avg_entry_price = (
                 abs(old_pos) * self._avg_entry_price + fill.size * fill.price
             ) / total_size
+            # Deduct fee from realized P&L on adding
+            self.realized_pnl -= fill.fee
         else:
             # Reducing or flipping position — realize P&L
             reduce_size = min(fill.size, abs(old_pos))

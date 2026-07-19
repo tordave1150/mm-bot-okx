@@ -2,6 +2,10 @@
 utils.py — Shared utility functions for the market maker bot.
 
 Tick rounding, minimum notional validation, and exchange market info helpers.
+
+NOTE: The typed MarketSpec in market_spec.py is the preferred path for new code.
+These float-based helpers are kept for backward compatibility with existing
+callers (quote_engine, order_manager, backtest).
 """
 
 from __future__ import annotations
@@ -9,6 +13,8 @@ from __future__ import annotations
 import logging
 import math
 from typing import Any
+
+from market_spec import MarketSpec, build_market_spec
 
 logger = logging.getLogger(__name__)
 
@@ -97,40 +103,18 @@ def fetch_market_info(exchange: Any, symbol: str) -> dict:
         lot_size:      float — minimum order size increment
         min_notional:  float — minimum order value (price * size)
         contract_size: float — contract multiplier (1 for spot)
+        market_spec:   MarketSpec — typed specification (new)
+
+    The dict format is maintained for backward compatibility with
+    quote_engine and order_manager. New code should use the MarketSpec
+    directly.
     """
-    try:
-        exchange.load_markets()
-        market = exchange.market(symbol)
-        tick_size = market.get("precision", {}).get("price", 0.01)
-        lot_size = market.get("precision", {}).get("amount", 0.001)
+    spec = build_market_spec(exchange, symbol)
 
-        # CCXT returns precision as number of decimals for some exchanges
-        # and as actual step size for others.  Normalise.
-        if isinstance(tick_size, int):
-            tick_size = 10 ** (-tick_size)
-        if isinstance(lot_size, int):
-            lot_size = 10 ** (-lot_size)
-
-        limits = market.get("limits", {})
-        cost_limits = limits.get("cost", {})
-        min_notional = cost_limits.get("min", 0.0) or 0.0
-
-        contract_size = float(market.get("contractSize", 1) or 1)
-
-        info = {
-            "tick_size": float(tick_size),
-            "lot_size": float(lot_size),
-            "min_notional": float(min_notional),
-            "contract_size": float(contract_size),
-        }
-        logger.info("Market info for %s: %s", symbol, info)
-        return info
-
-    except Exception:
-        logger.exception("Failed to fetch market info for %s; using defaults", symbol)
-        return {
-            "tick_size": 0.1,
-            "lot_size": 0.001,
-            "min_notional": 5.0,
-            "contract_size": 1.0,
-        }
+    return {
+        "tick_size": float(spec.price_tick),
+        "lot_size": float(spec.amount_step),
+        "min_notional": float(spec.min_notional) if spec.min_notional is not None else 0.0,
+        "contract_size": float(spec.contract_size),
+        "market_spec": spec,
+    }

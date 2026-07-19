@@ -45,9 +45,11 @@ class StatePersistence:
         peak_equity: float,
         known_fill_ids: list[str],
         iteration: int = 0,
+        schema_version: int = 1,
     ) -> None:
         """Persist current state to disk."""
         state = {
+            "schema_version": schema_version,
             "timestamp": time.time(),
             "iteration": iteration,
             "open_order_ids": open_order_ids,
@@ -60,13 +62,12 @@ class StatePersistence:
 
         try:
             tmp_path = self.filepath + ".tmp"
-            with open(tmp_path, "w") as f:
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(state, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
             # Atomic rename (as atomic as the OS allows)
-            if os.path.exists(self.filepath):
-                os.replace(tmp_path, self.filepath)
-            else:
-                os.rename(tmp_path, self.filepath)
+            os.replace(tmp_path, self.filepath)
 
             logger.debug("State saved (iter=%d)", iteration)
 
@@ -86,18 +87,32 @@ class StatePersistence:
             return None
 
         try:
-            with open(self.filepath, "r") as f:
+            with open(self.filepath, "r", encoding="utf-8") as f:
                 state = json.load(f)
 
             age = time.time() - state.get("timestamp", 0)
             logger.info(
-                "Loaded state from %s (iter=%d, age=%.0fs)",
+                "Loaded state from %s (schema=%d, iter=%d, age=%.0fs)",
                 self.filepath,
+                state.get("schema_version", 0),
                 state.get("iteration", 0),
                 age,
             )
             return state
 
+        except json.JSONDecodeError as e:
+            logger.error(
+                "Corrupted state file %s: %s — starting fresh",
+                self.filepath, e,
+            )
+            # Rename corrupted file for forensics
+            try:
+                corrupt_path = self.filepath + ".corrupt"
+                os.replace(self.filepath, corrupt_path)
+                logger.info("Moved corrupted state to %s", corrupt_path)
+            except Exception:
+                pass
+            return None
         except Exception:
             logger.exception("Failed to load state from %s", self.filepath)
             return None

@@ -35,8 +35,10 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
-# Annualisation factor: 288 ticks/day × 365 days
-_ANNUAL_FACTOR = 288 * 365
+# Default annualisation factor: 288 ticks/day × 365 days
+# Can be overridden per-result if ticks_per_day is known
+_DEFAULT_TICKS_PER_DAY = 288
+_DEFAULT_ANNUAL_FACTOR = _DEFAULT_TICKS_PER_DAY * 365
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -66,12 +68,16 @@ def compute_metrics(result: Any, config: Config) -> dict[str, Any]:
         logger.warning("Equity curve too short (%d points) — returning zeroed metrics", len(equity_curve))
         return _zeroed_metrics()
 
+    # Determine annualization factor dynamically
+    ticks_per_day = getattr(result, 'ticks_per_day', _DEFAULT_TICKS_PER_DAY)
+    annual_factor = ticks_per_day * 365
+
     # ── Returns series (tick-by-tick) ─────────────────────────────────────
     returns = np.diff(equity_curve) / np.where(equity_curve[:-1] != 0, equity_curve[:-1], 1.0)
     returns = returns[np.isfinite(returns)]  # remove any inf/nan
 
     # ── Sortino Ratio ─────────────────────────────────────────────────────
-    sortino = _sortino_ratio(returns)
+    sortino = _sortino_ratio(returns, annual_factor=annual_factor)
 
     # ── Max Drawdown ──────────────────────────────────────────────────────
     max_dd = _max_drawdown(equity_curve)
@@ -87,7 +93,7 @@ def compute_metrics(result: Any, config: Config) -> dict[str, Any]:
     cvar_99 = _cvar(returns, 0.01)
 
     # ── Annualised Volatility ─────────────────────────────────────────────
-    annual_vol = float(np.std(returns)) * math.sqrt(_ANNUAL_FACTOR) if len(returns) > 1 else 0.0
+    annual_vol = float(np.std(returns)) * math.sqrt(annual_factor) if len(returns) > 1 else 0.0
 
     # ── Total Return ──────────────────────────────────────────────────────
     initial = equity_curve[0]
@@ -100,6 +106,12 @@ def compute_metrics(result: Any, config: Config) -> dict[str, Any]:
     bid_fill_rate = result.bid_fills / fill_base
     ask_fill_rate = result.ask_fills / fill_base
     pct_time_over_80 = result.ticks_over_80pct_inventory / fill_base
+
+    # ── Fee and P&L metrics ───────────────────────────────────────
+    total_fees = getattr(result, 'total_fees', 0.0)
+    total_realized_pnl = getattr(result, 'total_realized_pnl', 0.0)
+    gross_pnl = total_return_pct * initial if initial != 0 else 0.0
+    net_pnl_after_fees = total_realized_pnl
 
     return {
         # Standard risk metrics
@@ -158,7 +170,7 @@ def format_metrics_table(metrics: dict[str, Any]) -> str:
 
 # ── Private helpers ───────────────────────────────────────────────────────────
 
-def _sortino_ratio(returns: np.ndarray, target: float = 0.0) -> float:
+def _sortino_ratio(returns: np.ndarray, target: float = 0.0, annual_factor: int = _DEFAULT_ANNUAL_FACTOR) -> float:
     """Sortino ratio (pure numpy)."""
     if len(returns) < 2:
         return 0.0
@@ -168,7 +180,7 @@ def _sortino_ratio(returns: np.ndarray, target: float = 0.0) -> float:
     mean_ret = float(np.mean(returns))
     if downside_std == 0:
         return 0.0
-    return float(mean_ret / downside_std * math.sqrt(_ANNUAL_FACTOR))
+    return float(mean_ret / downside_std * math.sqrt(annual_factor))
 
 
 def _max_drawdown(equity_curve: np.ndarray) -> float:

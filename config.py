@@ -3,15 +3,25 @@ config.py — Central configuration for the Avellaneda-Stoikov Market Maker Bot.
 
 All tunable parameters live here as a frozen dataclass. Credentials are loaded
 from environment variables via python-dotenv — never hardcoded.
+
+Required baseline (AGENTS.md §7):
+    initial_capital = 300.0 USDT
+    fixed_lot_size  = 0.01
+    max_inventory   = fixed_lot_size * max_inventory_lots
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from typing import Literal
 
 from dotenv import load_dotenv
+
+
+class ConfigValidationError(Exception):
+    """Raised when configuration values violate safety invariants."""
 
 
 @dataclass(frozen=True)
@@ -19,7 +29,7 @@ class Config:
     """Immutable configuration for the market maker bot.
 
     Parameters are grouped by subsystem. Defaults are conservative and
-    suitable for a ~$1,000 USDT sandbox account on OKX.
+    suitable for a ~$300 USDT sandbox account on OKX.
     """
 
     # ── Exchange ────────────────────────────────────────────────────────
@@ -35,26 +45,30 @@ class Config:
 
     # ── Avellaneda-Stoikov parameters ───────────────────────────────────
     gamma: float = 0.034                   # Risk aversion (higher → wider spread)
-    k: float = 2.586                        # Order book liquidity/depth parameter
+    k: float = 2.586                       # Order book liquidity/depth parameter
     tau: float = 1.0                       # Time horizon (1 for continuous perps)
 
     # ── Volatility-based fallback parameters ────────────────────────────
     volatility_multiplier: float = 2.0     # Multiplier on sigma for half-spread
     base_spread_ticks: float = 1.0         # Additive base spread in tick units
 
+    # ── Capital & sizing ────────────────────────────────────────────────
+    initial_capital: float = 300.0         # Starting capital in quote currency (USDT)
+    leverage: float = 1.0                  # Leverage multiplier (1 = no leverage)
+    fixed_lot_size: float = 0.01           # Fixed order size in base currency — MUST remain 0.01
+
     # ── Inventory ───────────────────────────────────────────────────────
-    max_inventory: float = 0.078           # Max absolute position size (in base)
+    # max_inventory is computed as fixed_lot_size * max_inventory_lots.
+    # Inventory limits are expressed in discrete lots, not floating-point amounts.
+    max_inventory_lots: int = 1            # Conservative default; 2 only after validation
     target_inventory: float = 0.0          # Desired neutral inventory level
 
-    # ── Capital & sizing ────────────────────────────────────────────────
-    initial_capital: float = 1000.0        # Starting capital in quote currency
-    leverage: float = 1.0                  # Leverage multiplier (1 = no leverage)
-    order_size_base: float = 0.01          # Base order size in base currency
-    order_size_pct: float = 0.05           # Order size as % of capital (alt mode)
-    use_pct_sizing: bool = False           # If True, use order_size_pct instead
+    # ── Fee rates ───────────────────────────────────────────────────────
+    maker_fee_rate: float = 0.0002         # OKX maker fee (0.02%)
+    taker_fee_rate: float = 0.0005         # OKX taker fee (0.05%)
 
     # ── Risk management ─────────────────────────────────────────────────
-    max_drawdown_pct: float = 0.031        # 5% drawdown → kill switch
+    max_drawdown_pct: float = 0.031        # ~3.1% drawdown → kill switch
     liquidation_distance_pct: float = 0.10 # Warn/halt if within 10% of liq price
     max_orders_per_second: int = 5         # Rate limit on order actions
 
@@ -96,6 +110,7 @@ class Config:
     # ── Persistence ─────────────────────────────────────────────────────
     state_file: str = "bot_state.json"
     state_save_interval: int = 10          # Save state every N iterations
+    state_schema_version: int = 1          # Schema version for state recovery
 
     # ── Strategy loop ───────────────────────────────────────────────────
     sleeptime: float = 0.5                 # Seconds between iterations
@@ -104,6 +119,79 @@ class Config:
     imbalance_skew_factor: float = 0.5     # How aggressively to skew on imbalance
     inventory_skew_factor: float = 1.0     # How aggressively to skew on inventory
 
+    # ── Logging ─────────────────────────────────────────────────────────
+    log_level: str = "INFO"                # Console + file log level
+    log_dir: str = "."                     # Directory for log files
+    log_to_file: bool = True               # Enable file logging
+    log_rotation_mb: int = 10              # Max size per log file in MB
+    log_backup_count: int = 7              # Number of rotated log backups
+
+    # ── Computed properties ─────────────────────────────────────────────
+
+    @property
+    def max_inventory(self) -> float:
+        """Max absolute position size, derived from fixed_lot_size * max_inventory_lots."""
+        return self.fixed_lot_size * self.max_inventory_lots
+
+
+def _validate_config(cfg: Config) -> None:
+    """Enforce safety invariants on a Config instance.
+
+    Raises ConfigValidationError if any invariant is violated.
+    """
+    errors: list[str] = []
+
+    # Fixed lot must be exactly 0.01
+    if cfg.fixed_lot_size != 0.01:
+        errors.append(
+            f"fixed_lot_size must be exactly 0.01, got {cfg.fixed_lot_size}"
+        )
+
+    # Initial capital must be positive
+    if cfg.initial_capital <= 0:
+        errors.append(
+            f"initial_capital must be > 0, got {cfg.initial_capital}"
+        )
+
+    # max_inventory_lots must be a positive integer
+    if not isinstance(cfg.max_inventory_lots, int) or cfg.max_inventory_lots < 1:
+        errors.append(
+            f"max_inventory_lots must be an integer >= 1, got {cfg.max_inventory_lots}"
+        )
+    if cfg.max_inventory_lots > 10:
+        errors.append(
+            f"max_inventory_lots must be <= 10 (hard limit), got {cfg.max_inventory_lots}"
+        )
+
+    # Sandbox must be True
+    if not cfg.sandbox:
+        errors.append(
+            "sandbox must be True — live trading is not permitted by AGENTS.md"
+        )
+
+    # Leverage must be >= 1
+    if cfg.leverage < 1.0:
+        errors.append(
+            f"leverage must be >= 1.0, got {cfg.leverage}"
+        )
+
+    # Drawdown threshold sanity
+    if not (0.0 < cfg.max_drawdown_pct <= 1.0):
+        errors.append(
+            f"max_drawdown_pct must be in (0, 1], got {cfg.max_drawdown_pct}"
+        )
+
+    # Fee rates must be non-negative
+    if cfg.maker_fee_rate < 0 or cfg.taker_fee_rate < 0:
+        errors.append(
+            f"Fee rates must be >= 0, got maker={cfg.maker_fee_rate}, "
+            f"taker={cfg.taker_fee_rate}"
+        )
+
+    if errors:
+        msg = "Configuration validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        raise ConfigValidationError(msg)
+
 
 def load_config(**overrides) -> Config:
     """Load configuration from environment variables and optional overrides.
@@ -111,6 +199,8 @@ def load_config(**overrides) -> Config:
     Reads .env file from the current directory (or parent directories).
     Environment variables take precedence over defaults; explicit overrides
     take precedence over everything.
+
+    Raises ConfigValidationError if the resulting config violates safety invariants.
     """
     load_dotenv()
 
@@ -134,4 +224,9 @@ def load_config(**overrides) -> Config:
 
     # ── Merge: defaults ← env ← overrides ──────────────────────────────
     merged = {**env_values, **overrides}
-    return Config(**merged)
+    cfg = Config(**merged)
+
+    # ── Validate invariants ─────────────────────────────────────────────
+    _validate_config(cfg)
+
+    return cfg

@@ -1,6 +1,6 @@
 # บอทเทรด Market Maker ด้วย Avellaneda-Stoikov
 
-บอทเทรดแบบ Market Maker สำหรับ OKX โดยใช้โมเดลการตั้งราคาแบบ **Avellaneda-Stoikov** พัฒนาต่อยอดบน **Lumibot** และใช้ **CCXT/CCXT Pro** ในการเชื่อมต่อกับกระดานเทรด
+บอทเทรดแบบ Market Maker สำหรับ OKX โดยใช้โมเดลการตั้งราคาแบบ **Avellaneda-Stoikov** และใช้ **CCXT/CCXT Pro** ในการเชื่อมต่อกับกระดานเทรด
 
 ## ฟีเจอร์หลัก
 
@@ -89,16 +89,16 @@ python main.py
 
 ```bash
 # รัน Unit Tests เพื่อเช็คความถูกต้องของ Matching Engine
-.\myenv\Scripts\python.exe -m pytest backtest/tests/ -v
+python -m pytest backtest/tests/ -v
 
 # รัน 1 Scenario ขำๆ (Smoke Test)
-.\myenv\Scripts\python.exe -W ignore -m backtest.runner --seed 42 --vol 0.25 --n-days 30
+python -W ignore -m backtest.runner --seed 42 --vol 0.25 --n-days 30
 
 # รัน Agent Loop (รันจนกว่าจะผ่านเกณฑ์ 20 รอบติดกัน)
-.\myenv\Scripts\python.exe -W ignore -m backtest.agent_loop
+python -W ignore -m backtest.agent_loop
 
 # ค้นหาค่าพารามิเตอร์ที่ดีที่สุดด้วย Optuna (Hyperparameter Optimization)
-.\myenv\Scripts\python.exe -m backtest.optimize --n-trials 100 --n-seeds 3
+python -m backtest.optimize --n-trials 100 --n-seeds 5
 ```
 
 ## การตั้งค่า (Configuration)
@@ -108,10 +108,12 @@ python main.py
 | พารามิเตอร์ | ค่าเริ่มต้น | คำอธิบาย |
 |---|---|---|
 | `strategy_mode` | `"avellaneda"` | `"avellaneda"` หรือ `"volatility"` |
-| `gamma` | `0.1` | ระดับการหลีกเลี่ยงความเสี่ยง (ค่ายิ่งสูง → Spread ยิ่งกว้าง) |
-| `k` | `1.5` | พารามิเตอร์สภาพคล่องของ Order book |
-| `max_inventory` | `0.01` | ขนาด Position สูงสุด (สกุลเงิน Base) |
-| `max_drawdown_pct` | `0.05` | จุดตัดการทำงาน (Kill-switch) เมื่อขาดทุน 5% |
+| `gamma` | `0.034` | ระดับการหลีกเลี่ยงความเสี่ยง (ค่ายิ่งสูง → Spread ยิ่งกว้าง) |
+| `k` | `2.586` | พารามิเตอร์สภาพคล่องของ Order book |
+| `initial_capital` | `300.0` | เงินต้นเริ่มต้น (USDT) |
+| `fixed_lot_size` | `0.01` | ขนาดออเดอร์คงที่ (ห้ามเปลี่ยน) |
+| `max_inventory_lots` | `1` | จำนวนล็อตสูงสุดที่ถือได้ |
+| `max_drawdown_pct` | `0.031` | จุดตัดการทำงาน (Kill-switch) เมื่อขาดทุน ~3.1% |
 | `leverage` | `1.0` | ตัวคูณ Leverage |
 | `sleeptime` | `0.5` | เวลาหน่วงระหว่างแต่ละรอบการทำงาน (วินาที) |
 

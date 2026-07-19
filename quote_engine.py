@@ -244,11 +244,8 @@ class QuoteEngine:
     # ── Sizing ──────────────────────────────────────────────────────────
 
     def _base_order_size(self, mid_price: float) -> float:
-        """Compute the base order size before inventory adjustment."""
-        if self.cfg.use_pct_sizing and mid_price > 0:
-            notional = self.cfg.initial_capital * self.cfg.order_size_pct
-            return notional / mid_price
-        return self.cfg.order_size_base
+        """Return the fixed lot size — no percentage-based sizing."""
+        return self.cfg.fixed_lot_size
 
     def _compute_order_size(
         self,

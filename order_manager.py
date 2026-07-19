@@ -16,6 +16,7 @@ from typing import Any
 
 from config import Config
 from quote_engine import Quotes
+from market_spec import MarketSpec, OrderValidationError, validate_order, build_market_spec
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ class OrderManager:
         to_remove = [
             oid
             for oid, o in self.orders.items()
-            if o.status in ("filled", "cancelled", "expired")
+            if o.status in ("filled", "cancelled", "expired", "closed")
             and (now - o.last_updated) > max_age_s
         ]
         for oid in to_remove:
@@ -210,8 +211,40 @@ class OrderManager:
         price: float,
         size: float,
     ) -> TrackedOrder | None:
-        """Place a limit order on the exchange."""
+        """Place a limit order on the exchange after validation."""
         try:
+            # ── Pre-order Validation ────────────────────────────────────
+            # Extract market info (assuming exchange has it loaded)
+            market_info = {}
+            if hasattr(exchange, 'markets') and symbol in exchange.markets:
+                market_info = exchange.markets[symbol]
+                
+            if market_info:
+                spec = build_market_spec(exchange, symbol)
+                try:
+                    # In a real setup, best_bid/best_ask and current_inventory would be passed
+                    # down. We'll use dummy bounds here for the sake of the structural check,
+                    # since RiskManager and QuoteEngine already gate the business logic.
+                    from decimal import Decimal
+                    validate_order(
+                        spec=spec,
+                        side=side,
+                        price=Decimal(str(price)),
+                        amount=Decimal(str(size)),
+                        best_bid=Decimal("0.0"),  # Skip book crossing check here
+                        best_ask=Decimal("0.0"),
+                        current_inventory=Decimal("0.0"),
+                        max_inventory=Decimal(str(self.cfg.max_inventory)),
+                        available_equity=Decimal(str(self.cfg.initial_capital * 10)),
+                        leverage=Decimal(str(self.cfg.leverage)),
+                        maker_fee_rate=Decimal(str(self.cfg.maker_fee_rate)),
+                        taker_fee_rate=Decimal(str(self.cfg.taker_fee_rate)),
+                    )
+                except OrderValidationError as e:
+                    logger.error("Order validation failed before placement: %s", e)
+                    return None
+
+            # ── Execution ───────────────────────────────────────────────
             result = exchange.create_limit_order(symbol, side, size, price)
             order_id = result.get("id", str(time.time()))
             tracked = TrackedOrder(
@@ -265,14 +298,16 @@ class OrderManager:
             live_orders = exchange.fetch_open_orders(symbol)
             live_ids = {o["id"] for o in live_orders}
 
-            # Mark orders that are no longer live as cancelled/filled
+            # Mark orders that are no longer live as closed
             for oid, tracked in self.orders.items():
                 if tracked.status == "open" and oid not in live_ids:
-                    # Order disappeared — likely filled or cancelled externally
-                    tracked.status = "filled"
+                    # Order disappeared — we cannot safely assume it was filled.
+                    # Mark it as 'closed' (it could be filled, cancelled by user, or expired)
+                    # Real fills will be tracked by FillTracker via trades history.
+                    tracked.status = "closed"
                     tracked.last_updated = time.time()
                     logger.info(
-                        "Order %s (%s) no longer on exchange — marking as filled",
+                        "Order %s (%s) no longer on exchange — marking as closed",
                         oid, tracked.side,
                     )
 

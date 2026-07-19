@@ -242,5 +242,19 @@ class TestMatchingEngineV1:
         engine.check_fills(_make_tick(51_000.0, 51_010.0, ts_ms=2_000_000), ft)
 
         # Realized P&L = (51000 - 50000) * 0.01 = $10
+        # If there were fees, it would be deducted. Here maker/taker = 0.0 by default.
         assert ft.realized_pnl == pytest.approx(10.0, rel=1e-6)
         assert ft.position == pytest.approx(0.0, abs=1e-9)
+
+    def test_matching_engine_deducts_fees(self):
+        """Verify that MatchingEngine computes and assigns fees correctly."""
+        engine = MatchingEngine(maker_fee_rate=0.001, taker_fee_rate=0.002)
+        ft = _make_fill_tracker()
+
+        engine.place_order("buy", 50_000.0, 0.01)
+        fills = engine.check_fills(_make_tick(49_990.0, 50_000.0), ft)
+
+        assert len(fills) == 1
+        # Fill is passive (maker) since it rested on the book
+        assert fills[0].fee == pytest.approx(50_000.0 * 0.01 * 0.001)
+        assert engine.total_fees == pytest.approx(50_000.0 * 0.01 * 0.001)
