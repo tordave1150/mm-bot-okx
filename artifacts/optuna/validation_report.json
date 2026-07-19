@@ -1,0 +1,15 @@
+{
+  "validation_seeds": [
+    200,
+    201,
+    202,
+    203,
+    204
+  ],
+  "avg_return": 0.05788241853039944,
+  "avg_max_drawdown": 0.3625770146538358,
+  "avg_sortino": 3.216321395831379,
+  "avg_kill_count": 2.0,
+  "avg_final_equity": 317.36472555911985,
+  "avg_fees": 0.0
+}

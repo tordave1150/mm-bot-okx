@@ -1,23 +1,23 @@
 {
-  "trial_number": 19,
-  "score": -1.1029754395588152,
+  "trial_number": 201,
+  "score": -1.29902317540805,
   "params": {
-    "gamma": 0.3551865880552074,
-    "k": 1.926079964546549,
-    "tau": 0.5258009632371485,
-    "max_inventory_lots": 2,
-    "max_drawdown_pct": 0.030154040362612246,
-    "trend_spread_multiplier": 2.4374790665844968,
-    "trend_size_multiplier": 0.7836907363298604,
-    "range_spread_multiplier": 0.920331053140998,
-    "imbalance_skew_factor": 0.17605102752667157,
-    "inventory_skew_factor": 1.3310414072495025,
-    "ema_span": 27
+    "gamma": 0.29533864670021215,
+    "k": 4.176599010180326,
+    "tau": 1.7512045323642924,
+    "max_inventory_lots": 1,
+    "max_drawdown_pct": 0.047074361080890616,
+    "trend_spread_multiplier": 1.5312376972972281,
+    "trend_size_multiplier": 0.7967883994603725,
+    "range_spread_multiplier": 1.1870480854924734,
+    "imbalance_skew_factor": 0.08759538768149842,
+    "inventory_skew_factor": 0.771210965163458,
+    "ema_span": 16
   },
   "fixed_lot_size": 0.01,
   "initial_capital": 300.0,
   "fill_mode": "probabilistic",
-  "n_trials": 20,
-  "n_seeds": 3,
+  "n_trials": 500,
+  "n_seeds": 5,
   "n_days": 7
 }
