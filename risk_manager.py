@@ -106,6 +106,7 @@ class RiskManager:
         inventory: float,
         mid_price: float,
         avg_entry_price: float = 0.0,
+        maintenance_margin: float = 0.0,
     ) -> RiskCheckResult:
         """Run all risk checks and return the most restrictive result.
 
@@ -129,6 +130,7 @@ class RiskManager:
         # Run individual checks — first failure wins
         checks = [
             self._check_drawdown(),
+            self._check_maintenance_margin(maintenance_margin),
             self._check_liquidation(inventory, mid_price, avg_entry_price),
         ]
 
@@ -220,6 +222,21 @@ class RiskManager:
                 ),
             )
 
+        return RiskCheckResult()
+
+    def _check_maintenance_margin(self, maintenance_margin: float) -> RiskCheckResult:
+        """Halt before equity falls to the configured maintenance requirement."""
+        if maintenance_margin <= 0:
+            return RiskCheckResult()
+        if self.current_equity <= maintenance_margin:
+            return RiskCheckResult(
+                allow_quoting=False,
+                cancel_all=True,
+                reason=(
+                    f"Equity {self.current_equity:.4f} <= maintenance margin "
+                    f"{maintenance_margin:.4f}"
+                ),
+            )
         return RiskCheckResult()
 
     # ── Kill-switch helpers ─────────────────────────────────────────────

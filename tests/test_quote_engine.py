@@ -10,6 +10,8 @@ Verifies:
 
 from __future__ import annotations
 
+import math
+
 import pytest
 from config import Config
 from quote_engine import QuoteEngine
@@ -28,13 +30,14 @@ def _make_market_state(
 
     # Synthesise a minimal order book
     half_spread = spread / 2
-    tick = {
-        "bids": [[mid - half_spread, 1.0]],
-        "asks": [[mid + half_spread, 1.0]],
-        "timestamp": 1_700_000_000_000,
-    }
-    # Feed enough ticks to build a volatility estimate
-    for _ in range(25):
+    # Feed deterministic alternating prices to build a non-zero estimate.
+    for index in range(25):
+        shifted_mid = mid * (1.0 + (volatility / 100.0) * (1 if index % 2 else -1))
+        tick = {
+            "bids": [[shifted_mid - half_spread, 1.0]],
+            "asks": [[shifted_mid + half_spread, 1.0]],
+            "timestamp": 1_700_000_000_000 + index * 1_000,
+        }
         ms.update_from_orderbook(tick)
 
     return ms
@@ -49,6 +52,52 @@ _MARKET_INFO = {
 
 
 class TestQuoteEngineBasic:
+
+    def test_avellaneda_uses_return_variance_without_extra_price_factor(self):
+        cfg = Config(gamma=0.04, k=2.0, tau=1.0, fixed_lot_size=0.01)
+        engine = QuoteEngine(cfg)
+        reservation, half = engine._avellaneda(50_000.0, 0.01, 0.01)
+
+        variance_distance = 50_000.0 * 0.01**2
+        adverse_distance = 0.04 * 50_000.0 * 0.01 * math.sqrt(2.0)
+        assert reservation == pytest.approx(50_000.0 - adverse_distance)
+        assert half == pytest.approx(
+            math.log1p(0.04 / 2.0) / 0.04
+            + adverse_distance
+            + 0.04 * variance_distance / 2.0
+        )
+        assert 28.0 < half < 29.0
+
+    def test_queue_improvement_does_not_erase_defensive_model_distance(self):
+        engine = QuoteEngine(Config(gamma=0.5, k=2.0, tau=1.0))
+        market = _make_market_state(mid=50_000.0, spread=10.0, volatility=1.0)
+        quotes = engine.generate(market, 0.0, _MARKET_INFO)
+
+        assert quotes.raw_bid_price < market.best_bid
+        assert quotes.raw_ask_price > market.best_ask
+        assert quotes.bid_price < market.best_bid
+        assert quotes.ask_price > market.best_ask
+
+    def test_drawdown_budget_suppresses_opening_but_not_reduce_only_exit(self):
+        engine = QuoteEngine(Config())
+        market = _make_market_state()
+
+        flat = engine.generate(
+            market, 0.0, _MARKET_INFO,
+            remaining_drawdown_budget_usdt=0.0,
+        )
+        assert not flat.bid_valid
+        assert not flat.ask_valid
+        assert flat.bid_skip_reason == "LOCAL_RISK_REJECT:DRAWDOWN_BUDGET"
+        assert flat.ask_skip_reason == "LOCAL_RISK_REJECT:DRAWDOWN_BUDGET"
+
+        long = engine.generate(
+            market, 0.01, _MARKET_INFO,
+            remaining_drawdown_budget_usdt=0.0,
+        )
+        assert not long.bid_valid
+        assert long.ask_valid
+        assert long.ask_reduce_only
 
     def test_bid_below_ask(self):
         """Generated bid price must be strictly below ask price."""
@@ -79,7 +128,7 @@ class TestQuoteEngineBasic:
         )
 
         if quotes.bid_valid and quotes.ask_valid:
-            mid = 50_000.0
+            mid = ms.mid_price
             bid_distance = mid - quotes.bid_price
             ask_distance = quotes.ask_price - mid
             assert bid_distance > 0
@@ -140,6 +189,44 @@ class TestInventorySkew:
         if quotes_neutral.ask_valid and quotes_short.ask_valid:
             # Short inventory → ask should be higher (less eager to sell more)
             assert quotes_short.ask_price >= quotes_neutral.ask_price
+
+    def test_long_limit_suppresses_bid_and_marks_ask_reduce_only(self):
+        cfg = Config()
+        quotes = QuoteEngine(cfg).generate(
+            _make_market_state(), cfg.max_inventory, _MARKET_INFO
+        )
+        assert not quotes.bid_valid
+        assert quotes.ask_valid
+        assert quotes.ask_reduce_only
+        assert quotes.ask_price > _make_market_state().best_bid
+
+    def test_short_limit_suppresses_ask_and_marks_bid_reduce_only(self):
+        cfg = Config()
+        quotes = QuoteEngine(cfg).generate(
+            _make_market_state(), -cfg.max_inventory, _MARKET_INFO
+        )
+        assert not quotes.ask_valid
+        assert quotes.bid_valid
+        assert quotes.bid_reduce_only
+
+
+class TestPostOnlyClamping:
+
+    def test_extreme_inventory_skew_is_clamped_after_rounding(self):
+        cfg = Config(inventory_skew_factor=2.5, imbalance_skew_factor=0.8)
+        ms = _make_market_state(spread=0.2, volatility=0.5)
+        quotes = QuoteEngine(cfg).generate(ms, cfg.max_inventory, _MARKET_INFO)
+        if quotes.bid_valid:
+            assert quotes.bid_price < ms.best_ask
+        if quotes.ask_valid:
+            assert quotes.ask_price > ms.best_bid
+
+    def test_locked_market_skips_both_sides(self):
+        ms = _make_market_state()
+        ms.best_ask = ms.best_bid
+        quotes = QuoteEngine(Config()).generate(ms, 0.0, _MARKET_INFO)
+        assert not quotes.bid_valid
+        assert not quotes.ask_valid
 
 
 class TestRegimeMultipliers:

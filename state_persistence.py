@@ -46,6 +46,11 @@ class StatePersistence:
         known_fill_ids: list[str],
         iteration: int = 0,
         schema_version: int = 1,
+        symbol: str | None = None,
+        quantity_unit: str = "base",
+        market_spec_fingerprint: str | None = None,
+        gross_realized_pnl: float = 0.0,
+        total_fees: float = 0.0,
     ) -> None:
         """Persist current state to disk."""
         state = {
@@ -58,6 +63,11 @@ class StatePersistence:
             "realized_pnl": realized_pnl,
             "peak_equity": peak_equity,
             "known_fill_ids": known_fill_ids[-500:],  # Cap to avoid bloat
+            "symbol": symbol,
+            "quantity_unit": quantity_unit,
+            "market_spec_fingerprint": market_spec_fingerprint,
+            "gross_realized_pnl": gross_realized_pnl,
+            "total_fees": total_fees,
         }
 
         try:

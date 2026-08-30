@@ -128,9 +128,11 @@ class AgentLoop:
         config_path: str | None = None,
         bot_config: Config | None = None,
         max_scenarios: int = 200,
+        fill_mode: str = "probabilistic",
     ) -> None:
         self.bot_config = bot_config or load_config()
         self.max_scenarios = max_scenarios
+        self.fill_mode = fill_mode
 
         # Load scenario YAML
         if config_path is None:
@@ -313,7 +315,9 @@ class AgentLoop:
 
         # Sub-loop 3: Run backtest
         t0 = time.time()
-        runner = BacktestRunner(self.bot_config)
+        runner = BacktestRunner(
+            self.bot_config, fill_mode=self.fill_mode, fill_seed=spec.seed
+        )
         result = runner.run(ticks)
         print(f"  Backtest complete in {time.time()-t0:.1f}s")
 
@@ -561,11 +565,19 @@ class AgentLoop:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _cli() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(
         description=(
             "AI Agent backtest loop — runs synthetic scenarios and proposes "
             "parameter improvements WITHOUT modifying any production files."
         )
+    )
+    parser.add_argument(
+        "--fill-mode",
+        default="probabilistic",
+        choices=["probabilistic", "conservative"],
+        help="Promotion-safe fill model",
     )
     parser.add_argument(
         "--config",
@@ -594,6 +606,7 @@ def _cli() -> None:
     loop = AgentLoop(
         config_path=args.config,
         max_scenarios=args.max_scenarios,
+        fill_mode=args.fill_mode,
     )
     loop.run()
 

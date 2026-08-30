@@ -1,0 +1,8 @@
+# Permitted local R0 test/backtest environment.
+-r requirements-runtime.txt
+arch>=6.0.0
+scipy>=1.10.0
+PyYAML>=6.0.0
+pytest>=7.0.0
+
+# Do not add Optuna here. It is isolated in requirements-research-disabled.txt.

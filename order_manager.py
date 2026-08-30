@@ -12,6 +12,7 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 from config import Config
@@ -30,6 +31,7 @@ class TrackedOrder:
     price: float
     size: float
     status: str = "open"    # "open", "filled", "cancelled", "expired"
+    reduce_only: bool = False
     created_at: float = field(default_factory=time.time)
     last_updated: float = field(default_factory=time.time)
 
@@ -79,6 +81,11 @@ class OrderManager:
         exchange: Any,
         symbol: str,
         market_info: dict,
+        *,
+        current_inventory: float,
+        available_equity: float,
+        best_bid: float,
+        best_ask: float,
     ) -> list[str]:
         """Reconcile target quotes against live orders.
 
@@ -87,19 +94,23 @@ class OrderManager:
         actions: list[str] = []
 
         # ── Sync local state with exchange ──────────────────────────────
-        self._sync_with_exchange(exchange, symbol)
+        self._sync_with_exchange(exchange, symbol, market_info)
 
         # ── Reconcile bid side ──────────────────────────────────────────
         bid_actions = self._reconcile_side(
             "buy", quotes.bid_price, quotes.bid_size, quotes.bid_valid,
-            exchange, symbol, market_info,
+            exchange, symbol, market_info, current_inventory,
+            available_equity, best_bid, best_ask,
+            quotes.bid_reduce_only,
         )
         actions.extend(bid_actions)
 
         # ── Reconcile ask side ──────────────────────────────────────────
         ask_actions = self._reconcile_side(
             "sell", quotes.ask_price, quotes.ask_size, quotes.ask_valid,
-            exchange, symbol, market_info,
+            exchange, symbol, market_info, current_inventory,
+            available_equity, best_bid, best_ask,
+            quotes.ask_reduce_only,
         )
         actions.extend(ask_actions)
 
@@ -142,6 +153,11 @@ class OrderManager:
         exchange: Any,
         symbol: str,
         market_info: dict,
+        current_inventory: float,
+        available_equity: float,
+        best_bid: float,
+        best_ask: float,
+        reduce_only: bool,
     ) -> list[str]:
         """Reconcile a single side (buy or sell)."""
         actions: list[str] = []
@@ -159,7 +175,10 @@ class OrderManager:
         if existing is None:
             if self._rate_limit_ok():
                 new_order = self._place_order(
-                    exchange, symbol, side, target_price, target_size
+                    exchange, symbol, side, target_price, target_size,
+                    market_info, current_inventory, available_equity,
+                    best_bid, best_ask,
+                    reduce_only,
                 )
                 if new_order:
                     actions.append(
@@ -187,7 +206,10 @@ class OrderManager:
         if self._rate_limit_ok():
             self._cancel_order(exchange, symbol, existing.order_id)
             new_order = self._place_order(
-                exchange, symbol, side, target_price, target_size
+                exchange, symbol, side, target_price, target_size,
+                market_info, current_inventory, available_equity,
+                best_bid, best_ask,
+                reduce_only,
             )
             if new_order:
                 actions.append(
@@ -210,42 +232,66 @@ class OrderManager:
         side: str,
         price: float,
         size: float,
+        market_info: dict,
+        current_inventory: float,
+        available_equity: float,
+        best_bid: float,
+        best_ask: float,
+        reduce_only: bool = False,
     ) -> TrackedOrder | None:
         """Place a limit order on the exchange after validation."""
         try:
             # ── Pre-order Validation ────────────────────────────────────
-            # Extract market info (assuming exchange has it loaded)
-            market_info = {}
-            if hasattr(exchange, 'markets') and symbol in exchange.markets:
-                market_info = exchange.markets[symbol]
-                
-            if market_info:
-                spec = build_market_spec(exchange, symbol)
-                try:
-                    # In a real setup, best_bid/best_ask and current_inventory would be passed
-                    # down. We'll use dummy bounds here for the sake of the structural check,
-                    # since RiskManager and QuoteEngine already gate the business logic.
-                    from decimal import Decimal
-                    validate_order(
-                        spec=spec,
-                        side=side,
-                        price=Decimal(str(price)),
-                        amount=Decimal(str(size)),
-                        best_bid=Decimal("0.0"),  # Skip book crossing check here
-                        best_ask=Decimal("0.0"),
-                        current_inventory=Decimal("0.0"),
-                        max_inventory=Decimal(str(self.cfg.max_inventory)),
-                        available_equity=Decimal(str(self.cfg.initial_capital * 10)),
-                        leverage=Decimal(str(self.cfg.leverage)),
-                        maker_fee_rate=Decimal(str(self.cfg.maker_fee_rate)),
-                        taker_fee_rate=Decimal(str(self.cfg.taker_fee_rate)),
-                    )
-                except OrderValidationError as e:
-                    logger.error("Order validation failed before placement: %s", e)
-                    return None
+            spec = market_info.get("market_spec")
+            if spec is None:
+                spec = build_market_spec(exchange, symbol, allow_fallback=False)
+            contracts = spec.base_to_contracts(Decimal(str(size)), exact=True)
+            reserved_margin = sum(
+                abs(order.size) * order.price / self.cfg.leverage
+                for order in self.orders.values()
+                if order.status == "open" and not order.reduce_only
+            )
+            emergency_reserve = (
+                price * size
+                * (self.cfg.taker_fee_rate + self.cfg.emergency_slippage_bps / 10_000.0)
+            )
+            validate_order(
+                spec=spec,
+                side=side,
+                price=Decimal(str(price)),
+                amount=contracts,
+                best_bid=Decimal(str(best_bid)),
+                best_ask=Decimal(str(best_ask)),
+                current_inventory=Decimal(str(current_inventory)),
+                max_inventory=Decimal(str(self.cfg.max_inventory)),
+                available_equity=Decimal(str(available_equity)),
+                leverage=Decimal(str(self.cfg.leverage)),
+                maker_fee_rate=Decimal(str(self.cfg.maker_fee_rate)),
+                taker_fee_rate=Decimal(str(self.cfg.taker_fee_rate)),
+                reduce_only=reduce_only,
+                reserved_margin=Decimal(str(reserved_margin)),
+                emergency_reserve=Decimal(str(emergency_reserve)),
+            )
+            projected_inventory = current_inventory + (
+                size if side == "buy" else -size
+            )
+            if available_equity <= 0:
+                raise OrderValidationError("Available equity must be positive")
+            proposed_margin = 0.0 if reduce_only else abs(size) * price / self.cfg.leverage
+            projected_margin_utilization = (
+                reserved_margin + proposed_margin + emergency_reserve
+            ) / available_equity
+            if projected_margin_utilization > self.cfg.max_margin_utilization:
+                raise OrderValidationError(
+                    f"Projected margin utilization {projected_margin_utilization:.6f} "
+                    f"exceeds limit {self.cfg.max_margin_utilization:.6f}"
+                )
 
             # ── Execution ───────────────────────────────────────────────
-            result = exchange.create_limit_order(symbol, side, size, price)
+            result = exchange.create_order(
+                symbol, "limit", side, float(contracts), price,
+                {"postOnly": True, "reduceOnly": reduce_only},
+            )
             order_id = result.get("id", str(time.time()))
             tracked = TrackedOrder(
                 order_id=order_id,
@@ -253,6 +299,7 @@ class OrderManager:
                 price=price,
                 size=size,
                 status="open",
+                reduce_only=reduce_only,
             )
             self.orders[order_id] = tracked
             self._record_action()
@@ -292,7 +339,9 @@ class OrderManager:
                 logger.exception("Failed to cancel order %s", order_id)
                 return False
 
-    def _sync_with_exchange(self, exchange: Any, symbol: str) -> None:
+    def _sync_with_exchange(
+        self, exchange: Any, symbol: str, market_info: dict
+    ) -> None:
         """Fetch open orders from exchange and reconcile with local table."""
         try:
             live_orders = exchange.fetch_open_orders(symbol)
@@ -315,16 +364,54 @@ class OrderManager:
             for live_order in live_orders:
                 oid = live_order["id"]
                 if oid not in self.orders:
+                    spec = market_info.get("market_spec")
+                    exchange_amount = Decimal(str(live_order.get("amount", 0)))
+                    base_size = (
+                        float(spec.contracts_to_base(exchange_amount))
+                        if spec is not None else float(exchange_amount)
+                    )
                     self.orders[oid] = TrackedOrder(
                         order_id=oid,
                         side=live_order.get("side", "unknown"),
                         price=float(live_order.get("price", 0)),
-                        size=float(live_order.get("amount", 0)),
+                        size=base_size,
                         status="open",
                     )
 
         except Exception:
             logger.exception("Failed to sync orders with exchange")
+
+    def flatten_position(
+        self,
+        exchange: Any,
+        symbol: str,
+        position_base: float,
+        market_info: dict,
+    ) -> list[str]:
+        """Submit a reduce-only IOC market close for the canonical base position."""
+        if abs(position_base) <= 1e-12:
+            return []
+        spec = market_info.get("market_spec")
+        if spec is None:
+            raise OrderValidationError("Cannot flatten without MarketSpec")
+        contracts = spec.base_to_contracts(
+            Decimal(str(abs(position_base))), exact=True
+        )
+        side = "sell" if position_base > 0 else "buy"
+        result = exchange.create_order(
+            symbol,
+            "market",
+            side,
+            float(contracts),
+            None,
+            {"reduceOnly": True, "timeInForce": "IOC"},
+        )
+        order_id = result.get("id", "unknown")
+        logger.critical(
+            "Emergency flatten submitted: %s %s contracts (%s base), id=%s",
+            side, contracts, abs(position_base), order_id,
+        )
+        return [f"KILL flatten {side} {contracts} contracts id={order_id}"]
 
     # ── Rate limiting ───────────────────────────────────────────────────
 

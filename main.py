@@ -92,8 +92,23 @@ def _setup_logging(config) -> None:
 logger = logging.getLogger(__name__)
 
 
+# The controlled OKX Demo successor stack is the only canonical execution path
+# while the root R0 protocol is active. Keep this legacy entry point fail-closed
+# before load_config() can read dotenv or any credential-bearing environment.
+LEGACY_RUNTIME_DISABLED = True
+LEGACY_RUNTIME_DISABLED_MESSAGE = (
+    "Legacy main.py runtime is disabled by the active R0 protocol. "
+    "Use the offline successor workflow documented in README.md; "
+    "R1 preparation and preflight require separate exact authorization."
+)
+
+
 def main() -> None:
     """Configure exchange, trading bot, and start the async event loop."""
+    if LEGACY_RUNTIME_DISABLED:
+        print(f"FATAL: {LEGACY_RUNTIME_DISABLED_MESSAGE}", file=sys.stderr)
+        raise SystemExit(2)
+
     # ── Load config ─────────────────────────────────────────────────────
     try:
         config = load_config()

@@ -55,7 +55,9 @@ class Config:
     # ── Capital & sizing ────────────────────────────────────────────────
     initial_capital: float = 300.0         # Starting capital in quote currency (USDT)
     leverage: float = 1.0                  # Leverage multiplier (1 = no leverage)
-    fixed_lot_size: float = 0.01           # Fixed order size in base currency — MUST remain 0.01
+    # Internal strategy quantities are BTC base quantity. Exchange adapters
+    # convert base quantity to contracts through MarketSpec exactly once.
+    fixed_lot_size: float = 0.01           # Fixed base-asset quantity — MUST remain 0.01
 
     # ── Inventory ───────────────────────────────────────────────────────
     # max_inventory is computed as fixed_lot_size * max_inventory_lots.
@@ -70,7 +72,16 @@ class Config:
     # ── Risk management ─────────────────────────────────────────────────
     max_drawdown_pct: float = 0.031        # ~3.1% drawdown → kill switch
     liquidation_distance_pct: float = 0.10 # Warn/halt if within 10% of liq price
+    max_margin_utilization: float = 0.80   # Hard promotion/order gate
+    maintenance_margin_rate: float = 0.005 # Frozen backtest market-tier fixture
     max_orders_per_second: int = 5         # Rate limit on order actions
+
+    # ── Emergency and terminal execution ────────────────────────────────
+    emergency_policy: Literal["flatten"] = "flatten"
+    emergency_slippage_bps: float = 10.0  # Adverse market/IOC slippage
+    terminal_policy: Literal["flatten"] = "flatten"
+    terminal_slippage_bps: float = 5.0
+    funding_rate_per_day: float = 0.0      # Explicit frozen scenario assumption
 
     # ── Order management ────────────────────────────────────────────────
     price_change_threshold: float = 0.0001 # Min price change ratio to re-quote
@@ -110,7 +121,7 @@ class Config:
     # ── Persistence ─────────────────────────────────────────────────────
     state_file: str = "bot_state.json"
     state_save_interval: int = 10          # Save state every N iterations
-    state_schema_version: int = 1          # Schema version for state recovery
+    state_schema_version: int = 2          # v2 binds state to symbol/unit semantics
 
     # ── Strategy loop ───────────────────────────────────────────────────
     sleeptime: float = 0.5                 # Seconds between iterations
@@ -180,6 +191,24 @@ def _validate_config(cfg: Config) -> None:
         errors.append(
             f"max_drawdown_pct must be in (0, 1], got {cfg.max_drawdown_pct}"
         )
+
+    if not (0.0 < cfg.max_margin_utilization <= 1.0):
+        errors.append(
+            "max_margin_utilization must be in (0, 1], got "
+            f"{cfg.max_margin_utilization}"
+        )
+
+    if not (0.0 <= cfg.maintenance_margin_rate < 1.0):
+        errors.append(
+            "maintenance_margin_rate must be in [0, 1), got "
+            f"{cfg.maintenance_margin_rate}"
+        )
+
+    if cfg.emergency_policy != "flatten" or cfg.terminal_policy != "flatten":
+        errors.append("emergency_policy and terminal_policy must both be 'flatten'")
+
+    if cfg.emergency_slippage_bps < 0 or cfg.terminal_slippage_bps < 0:
+        errors.append("emergency and terminal slippage must be non-negative")
 
     # Fee rates must be non-negative
     if cfg.maker_fee_rate < 0 or cfg.taker_fee_rate < 0:

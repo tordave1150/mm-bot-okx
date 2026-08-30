@@ -24,6 +24,7 @@ import logging
 import random
 import threading
 import time
+from decimal import Decimal
 from typing import Any
 
 from config import Config
@@ -66,6 +67,9 @@ class TradingBot:
         self._exchange: Any = None
         self._market_info: dict = {}
         self._iteration: int = 0
+        self._available_equity: float = 0.0
+        self._exchange_equity: float | None = None
+        self._kill_flatten_submitted: bool = False
 
         # ── WebSocket background thread ─────────────────────────────────
         self._ws_thread: threading.Thread | None = None
@@ -161,11 +165,16 @@ class TradingBot:
         self.market_state.regime = regime
 
         # ── 3. Fill detection ───────────────────────────────────────────
-        new_fills = self.fill_tracker.detect_fills(self._exchange, self.cfg.symbol)
+        new_fills = self.fill_tracker.detect_fills(
+            self._exchange, self.cfg.symbol, self._market_info["market_spec"]
+        )
         for fill in new_fills:
             actions.append(
                 f"Fill: {fill.side} {fill.size:.6f} @ {fill.price:,.2f}"
             )
+
+        # Exchange balance/position is authoritative over persisted/local state.
+        self._reconcile_account_state()
 
         # ── 4. P&L update ──────────────────────────────────────────────
         unrealized = self.fill_tracker.compute_unrealized_pnl(
@@ -175,11 +184,7 @@ class TradingBot:
         self.risk_manager.update_pnl(
             realized_delta=0.0,  # FillTracker tracks realized P&L internally
             unrealized=unrealized,
-            current_equity=(
-                self.cfg.initial_capital
-                + self.fill_tracker.realized_pnl
-                + unrealized
-            ),
+            current_equity=self._exchange_equity,
         )
 
         # ── 5. Risk checks ─────────────────────────────────────────────
@@ -194,6 +199,21 @@ class TradingBot:
                 self._exchange, self.cfg.symbol
             )
             actions.extend(cancel_actions)
+            emergency_tolerance = float(self._market_info.get("base_step", 0.0))
+            if abs(self.fill_tracker.position) > emergency_tolerance:
+                try:
+                    actions.extend(self.order_manager.flatten_position(
+                        self._exchange,
+                        self.cfg.symbol,
+                        self.fill_tracker.position,
+                        self._market_info,
+                    ))
+                    self._kill_flatten_submitted = True
+                except Exception:
+                    logger.exception("Emergency flatten submission failed")
+                    actions.append("[red]EMERGENCY FLATTEN FAILED[/]")
+            elif self._kill_flatten_submitted:
+                actions.append("KILL flatten confirmed within one quantity step")
             actions.append(f"[red]RISK HALT: {risk_result.reason}[/]")
             self._update_dashboard(actions)
             self._save_state()
@@ -206,6 +226,14 @@ class TradingBot:
             market_info=self._market_info,
             spread_multiplier=self.regime_detector.get_spread_multiplier(),
             size_multiplier=self.regime_detector.get_size_multiplier(),
+            remaining_drawdown_budget_usdt=max(
+                0.0,
+                self.risk_manager.peak_equity * self.cfg.max_drawdown_pct
+                - (
+                    self.risk_manager.peak_equity
+                    - self.risk_manager.current_equity
+                ),
+            ),
         )
 
         if not risk_result.allow_quoting:
@@ -215,7 +243,14 @@ class TradingBot:
 
         # ── 7. Order reconciliation ─────────────────────────────────────
         order_actions = self.order_manager.reconcile(
-            quotes, self._exchange, self.cfg.symbol, self._market_info
+            quotes,
+            self._exchange,
+            self.cfg.symbol,
+            self._market_info,
+            current_inventory=self.fill_tracker.position,
+            available_equity=self._available_equity,
+            best_bid=self.market_state.best_bid,
+            best_ask=self.market_state.best_ask,
         )
         actions.extend(order_actions)
 
@@ -275,6 +310,7 @@ class TradingBot:
             self._market_info = fetch_market_info(
                 self._exchange, self.cfg.symbol
             )
+            self._reconcile_account_state(initialize_equity=True)
             self.dashboard_state.add_log(
                 f"Exchange connected: {self.cfg.exchange_name} "
                 f"sandbox={self.cfg.sandbox} "
@@ -422,12 +458,27 @@ class TradingBot:
             )
             return
 
+        expected_fingerprint = state.get("market_spec_fingerprint")
+        if state.get("symbol") not in (None, self.cfg.symbol):
+            logger.warning("Persisted state symbol mismatch — starting fresh")
+            return
+        if state.get("quantity_unit", "base") != "base":
+            logger.warning("Persisted state quantity unit mismatch — starting fresh")
+            return
+        if expected_fingerprint and self._market_info:
+            current = self._market_info["market_spec"].fingerprint
+            if expected_fingerprint != current:
+                logger.warning("Persisted market spec mismatch — starting fresh")
+                return
+
         # Restore via public method on FillTracker
         self.fill_tracker.restore_state(
             known_fill_ids=set(state.get("known_fill_ids", [])),
             realized_pnl=state.get("realized_pnl", 0.0),
             position=state.get("inventory", 0.0),
             avg_entry_price=state.get("avg_entry_price", 0.0),
+            gross_realized_pnl=state.get("gross_realized_pnl"),
+            total_fees=state.get("total_fees"),
         )
 
         # Restore risk manager peak equity
@@ -450,6 +501,14 @@ class TradingBot:
             known_fill_ids=list(self.fill_tracker.known_fill_ids),
             iteration=self._iteration,
             schema_version=self.cfg.state_schema_version,
+            symbol=self.cfg.symbol,
+            quantity_unit="base",
+            market_spec_fingerprint=(
+                self._market_info["market_spec"].fingerprint
+                if self._market_info else None
+            ),
+            gross_realized_pnl=self.fill_tracker.gross_realized_pnl,
+            total_fees=self.fill_tracker.total_fees,
         )
 
     def _save_state_periodic(self) -> None:
@@ -464,7 +523,58 @@ class TradingBot:
             peak_equity=self.risk_manager.peak_equity,
             known_fill_ids=list(self.fill_tracker.known_fill_ids),
             schema_version=self.cfg.state_schema_version,
+            symbol=self.cfg.symbol,
+            quantity_unit="base",
+            market_spec_fingerprint=(
+                self._market_info["market_spec"].fingerprint
+                if self._market_info else None
+            ),
+            gross_realized_pnl=self.fill_tracker.gross_realized_pnl,
+            total_fees=self.fill_tracker.total_fees,
         )
+
+    def _reconcile_account_state(self, initialize_equity: bool = False) -> None:
+        """Refresh exchange balance and position before any order decision."""
+        if self._exchange is None or not self._market_info:
+            return
+        try:
+            balance = self._exchange.fetch_balance()
+            usdt = balance.get("USDT", {})
+            total = float(usdt.get("total") or balance.get("total", {}).get("USDT") or 0.0)
+            free = float(usdt.get("free") or balance.get("free", {}).get("USDT") or 0.0)
+            if total <= 0 or free < 0:
+                raise ValueError("Exchange returned invalid USDT equity")
+            self._exchange_equity = total
+            self._available_equity = free
+            if initialize_equity:
+                self.risk_manager.initial_equity = total
+                self.risk_manager.current_equity = total
+                self.risk_manager.peak_equity = total
+
+            positions = self._exchange.fetch_positions([self.cfg.symbol])
+            spec = self._market_info["market_spec"]
+            for position in positions:
+                if position.get("symbol") not in (None, self.cfg.symbol):
+                    continue
+                contracts = float(position.get("contracts") or 0.0)
+                side = position.get("side", "long")
+                signed = contracts if side == "long" else -contracts
+                base_position = float(spec.contracts_to_base(Decimal(str(abs(signed)))))
+                if signed < 0:
+                    base_position = -base_position
+                entry = float(position.get("entryPrice") or 0.0)
+                if abs(base_position - self.fill_tracker.position) > 1e-12:
+                    logger.warning(
+                        "Reconciling local position %.8f to exchange %.8f base",
+                        self.fill_tracker.position, base_position,
+                    )
+                    self.fill_tracker._position = base_position
+                    self.fill_tracker._avg_entry_price = entry if base_position else 0.0
+                break
+        except Exception:
+            logger.exception("Account reconciliation failed; quoting will fail closed")
+            self._available_equity = 0.0
+            self._exchange_equity = None
 
     # ── Dashboard ───────────────────────────────────────────────────────
 

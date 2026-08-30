@@ -1,0 +1,3 @@
+# Research-only dependencies. Current protocol prohibits Optuna execution/import.
+-r requirements-offline-test.txt
+optuna>=3.0.0

@@ -95,7 +95,12 @@ def adjust_size_for_notional(
     return adjusted
 
 
-def fetch_market_info(exchange: Any, symbol: str) -> dict:
+def fetch_market_info(
+    exchange: Any,
+    symbol: str,
+    *,
+    allow_fallback: bool = False,
+) -> dict:
     """Fetch tick_size, lot_size, and min_notional from the exchange.
 
     Returns a dict with keys:
@@ -109,11 +114,15 @@ def fetch_market_info(exchange: Any, symbol: str) -> dict:
     quote_engine and order_manager. New code should use the MarketSpec
     directly.
     """
-    spec = build_market_spec(exchange, symbol)
+    spec = build_market_spec(exchange, symbol, allow_fallback=allow_fallback)
+    base_step = spec.contracts_to_base(spec.amount_step)
+    min_base_amount = spec.contracts_to_base(spec.min_amount)
 
     return {
         "tick_size": float(spec.price_tick),
         "lot_size": float(spec.amount_step),
+        "base_step": float(base_step),
+        "min_base_amount": float(min_base_amount),
         "min_notional": float(spec.min_notional) if spec.min_notional is not None else 0.0,
         "contract_size": float(spec.contract_size),
         "market_spec": spec,

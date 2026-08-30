@@ -1,130 +1,80 @@
-# บอทเทรด Market Maker ด้วย Avellaneda-Stoikov
+# bot-trade — OKX Demo Market-Maker Research
 
-บอทเทรดแบบ Market Maker สำหรับ OKX โดยใช้โมเดลการตั้งราคาแบบ **Avellaneda-Stoikov** และใช้ **CCXT/CCXT Pro** ในการเชื่อมต่อกับกระดานเทรด
+## Current status
 
-## ฟีเจอร์หลัก
+This repository is in **R0 offline repair** for an OKX Demo market-maker. It is not approved for R1 preflight, an economic campaign, Live access, or production.
 
-- **โหมดกลยุทธ์ 2 แบบ**: แบบตั้งราคาตาม Avellaneda-Stoikov (Optimal Quoting) และโหมดสำรองตามความผันผวน (Volatility-based fallback)
-- **ข้อมูลแบบ Real-time**: รับข้อมูล Order Book ผ่าน WebSocket ของ CCXT Pro พร้อมระบบสลับไปใช้ REST อัตโนมัติเมื่อข้อมูลขัดข้อง
-- **การจัดการสต็อก (Inventory)**: การปรับราคา Reservation Price ตามสถานะพอร์ต, การลดขนาดไม้เทรด, และการจำกัดขนาดโพสิชันสูงสุด
-- **การปรับสมดุลจาก Order Book (Imbalance Skewing)**: ปรับราคาเสนอซื้อ/ขายแบบไม่สมมาตร (Asymmetric) ตามแรงกดดันในตลาด
-- **การจัดการความเสี่ยง (Risk Management)**: ระบบตัดการทำงาน (Kill-switch) เมื่อขาดทุนเกินกำหนด (Drawdown), ตรวจสอบระยะห่างจากราคา Liquidate, และการจำกัดความถี่ในการส่งคำสั่ง
-- **การตรวจจับการจับคู่คำสั่ง (Fill Detection)**: ตรวจสอบแบบ Polling ด้วย REST API พร้อมติดตามราคา VWAP และการบันทึกกำไร/ขาดทุนอย่างถูกต้อง
-- **การตรวจจับสภาวะตลาด (Regime Detection)**: ใช้จุดตัด EMA, RSI, และความชันของราคาเพื่อจำแนกสภาวะตลาดแบบมีเทรนด์ (Trend) หรือแบบแกว่งตัว (Range)
-- **Dashboard แสดงผลแบบสด**: แสดงข้อมูลบนเว็บเพจที่ทำงานที่ Localhost พร้อมข้อมูลตลาด, P&L, ออเดอร์, Fills, ค่าความเสี่ยงต่างๆ และปุ่มควบคุมสั่งหยุด/เริ่มการทำงาน (Stop/Resume) ได้จากหน้าเว็บ
-- **การกู้คืนระบบ (Crash Recovery)**: บันทึกสถานะลงไฟล์ JSON อย่างต่อเนื่องเพื่อการรีสตาร์ทบอทอย่างปลอดภัย
-- **Hyperparameter Optimization**: มาพร้อมกับสคริปต์สำหรับการค้นหาค่าพารามิเตอร์ที่เหมาะสมที่สุด (Optuna) ผ่านข้อมูลตลาดจำลอง (Synthetic Data)
-
-## การทำงานของบอท (Trading Logic) แบบละเอียด
-
-กลไกหลักของบอทถูกควบคุมโดย `strategy.py` ซึ่งจะทำงานเป็นรอบๆ ตามค่า `sleeptime` (เช่น ทุกๆ 0.5 วินาที) โดยในแต่ละรอบจะมีขั้นตอนการทำงาน (Logic) ดังนี้:
-
-1. **ดึงข้อมูลตลาด (Refresh Market State)**: 
-   - ดึงข้อมูล Order Book ล่าสุดจาก WebSocket 
-   - หาก WebSocket ขาดการเชื่อมต่อหรือข้อมูลไม่อัปเดต บอทจะสลับไปดึงข้อมูลผ่าน REST API แทนอัตโนมัติ เพื่อให้ได้ราคา Mid-price และข้อมูล Spread ที่ถูกต้องเสมอ
-2. **ตรวจจับสภาวะตลาด (Regime Detection)**: 
-   - นำประวัติราคามาคำนวณและจำแนกสภาวะตลาดปัจจุบัน ว่าเป็นแบบ "เทรนด์ (Trend)" หรือ "แกว่งตัว (Range)" เพื่อนำไปปรับพฤติกรรมการตั้งราคา
-3. **ตรวจสอบการทำงานของออเดอร์ (Fill Detection)**: 
-   - ตรวจสอบว่ามีออเดอร์ไหนถูกจับคู่ (Matched/Filled) ไปแล้วบ้าง และอัปเดตจำนวนเหรียญในพอร์ต (Inventory) รวมถึงราคาเฉลี่ยที่เข้าซื้อ (Average Entry Price)
-4. **อัปเดตผลกำไร/ขาดทุน (P&L Update)**: 
-   - คำนวณกำไร/ขาดทุนที่ยังไม่เกิดขึ้นจริง (Unrealized PNL) ตามราคาตลาดล่าสุด และนำไปรวมกับกำไร/ขาดทุนที่เกิดขึ้นแล้ว (Realized PNL) จากขั้นตอนก่อนหน้า
-5. **ตรวจสอบความเสี่ยง (Risk Checks)**: 
-   - หากขาดทุนรวม (Drawdown) ถึงจุดวิกฤต หรือเข้าใกล้ราคา Liquidation บอทจะเข้าโหมด Kill-switch โดยจะยกเลิกออเดอร์ทั้งหมดทันที และหยุดส่งคำสั่งใหม่
-6. **สร้างคำสั่งเสนอซื้อ/ขาย (Quote Generation)**: 
-   - **Avellaneda-Stoikov (หลัก):** คำนวณราคา Reservation Price (ราคาที่บอทรู้สึกปลอดภัย) โดยพิจารณาจาก Inventory ปัจจุบัน และคำนวณระยะ Spread ที่เหมาะสมที่สุด (Optimal Spread) ตามค่าความผันผวนของตลาด
-   - ปรับแต่งราคาเพิ่มเติมจากความไม่สมดุลของ Order book (Imbalance Skewing)
-   - ปรับ Spread และขนาดออเดอร์ตามสภาวะตลาด (เช่น ตลาดมีเทรนด์แรงๆ อาจจะถ่าง Spread ให้กว้างขึ้น และลดขนาดออเดอร์ลง)
-7. **จัดการและอัปเดตออเดอร์ (Order Reconciliation)**: 
-   - เทียบออเดอร์ที่ควรจะเป็น (จากข้อ 6) กับออเดอร์ที่เปิดอยู่จริงบนกระดานเทรด หากราคาหรือขนาดเปลี่ยนไปจากเดิมเกินเกณฑ์ที่ตั้งไว้ บอทจะทำการแก้ไข (Amend) หรือยกเลิกแล้วตั้งใหม่ (Cancel & Replace)
-8. **จัดการออเดอร์ที่ค้างและไม่ได้ใช้งาน (Cleanup)**: 
-   - เคลียร์ออเดอร์ที่ถูกปิดไปแล้วออกจากระบบความจำ
-9. **บันทึกสถานะ (State Persistence)**: 
-   - เซฟข้อมูล Inventory, P&L, และออเดอร์ลงไฟล์ `bot_state.json` เป็นระยะๆ เพื่อป้องกันข้อมูลหายหากโปรแกรมดับ
-10. **อัปเดตหน้าจอ (Dashboard Update)**: 
-    - ส่งข้อมูลสเตตัสล่าสุดทั้งหมดไปที่ In-memory state เพื่อให้ Web Server นำไปแสดงผลบน Browser (หน้าต่าง Dashboard ที่แยกออกมา) แบบสดๆ
-
-## เริ่มต้นใช้งาน
-
-### 1. ติดตั้ง Dependencies
-
-```bash
-python -m venv myenv
-# Windows:
-.\myenv\Scripts\activate
-# macOS/Linux:
-source myenv/bin/activate
-
-pip install -r requirements.txt
+```text
+production_authorized: false
+live_mode_available: false
+live_endpoint_attempts: 0
+live_orders: 0
+optuna_executed: false
+validation_opened: false
+holdout_opened: false
+git_write_operation: false
 ```
 
-### 2. ตั้งค่า API Key
+Read [AGENTS.md](AGENTS.md) before any execution. Its active phase and risk rules override this README.
 
-```bash
-cp .env.example .env
+## Canonical implementation
+
+The canonical implementation is the controlled successor stack:
+
+```text
+market_maker/                 frozen market-maker model and accounting
+okx_demo_*.py                 demo campaign, controller, protocol, and repairs
+okx_fill_restart_*.py         recovery, gateway, formal safety, and evidence tools
+tests/test_okx_*.py           successor regression tests
+backtest/mm_*.py              permitted offline market-maker tests
 ```
 
-แก้ไขไฟล์ `.env` ด้วยข้อมูล API จาก OKX:
+The design target is a passive BTC/USDT:USDT maker strategy with a frozen risk boundary. The current repair focuses on increasing normal maker fills and FIFO maker work-off while reducing terminal special flatten dependence, without widening economic risk.
 
-```env
-OKX_API_KEY=your_api_key_here
-OKX_SECRET=your_secret_here
-OKX_PASSPHRASE=your_passphrase_here
-OKX_SANDBOX=true
-```
+For the component map and legacy inventory, see [ARCHITECTURE.md](ARCHITECTURE.md) and [REPO_CLASSIFICATION_MANIFEST.md](REPO_CLASSIFICATION_MANIFEST.md).
 
-> **⚠️ แนะนำให้เริ่มต้นด้วยโหมด Sandbox (`OKX_SANDBOX=true`)** เพื่อทดสอบระบบก่อนใช้เงินจริง
+## R0-only workflow
 
-### 3. รันบอท
+Allowed work is local/offline implementation, deterministic fixtures, audits, and permitted tests with blank credentials and socket denial. A fresh R0 run must produce non-overwriting evidence and write its terminal marker last.
 
-```bash
-python main.py
-```
-*(เมื่อรันบอท หน้าจอ Dashboard จะถูกเปิดขึ้นมาบน Browser อัตโนมัติที่ `http://127.0.0.1:8765`)*
+Before running any permitted tests:
 
-## ระบบ Backtest, Stress-Test และ Optimization (ออฟไลน์)
+1. Create an environment from `requirements-offline-test.txt`.
+2. Keep credentials blank and deny sockets.
+3. Run only the successor-applicable targeted, root non-Optuna, and permitted backtest non-Optuna scopes defined by the active protocol.
+4. Confirm endpoint/mutation, secret, test, and socket audits are clean.
 
-บอทมาพร้อมกับระบบ Backtest แบบออฟไลน์ที่แยกส่วนออกมา (`backtest/`) โดยไม่ยุ่งเกี่ยวกับโค้ด Production เดิม ระบบนี้สามารถสร้างข้อมูลตลาดจำลอง (Synthetic Data) แบบสุ่มและทดสอบบอทในสภาวะตลาดแบบต่างๆ เช่น ความผันผวนสูง (High Volatility) หรือตลาดพัง (Crash) รวมไปถึงระบบค้นหาค่าพารามิเตอร์ที่ดีที่สุด (Hyperparameter Optimization)
+Do not run `main.py`, connect to OKX, run Optuna, open validation/holdout workflows, or use a prior package/run/session identity.
 
-**คำสั่งรันระบบ Backtest:**
+## Dependency sets
 
-```bash
-# รัน Unit Tests เพื่อเช็คความถูกต้องของ Matching Engine
-python -m pytest backtest/tests/ -v
-
-# รัน 1 Scenario ขำๆ (Smoke Test)
-python -W ignore -m backtest.runner --seed 42 --vol 0.25 --n-days 30
-
-# รัน Agent Loop (รันจนกว่าจะผ่านเกณฑ์ 20 รอบติดกัน)
-python -W ignore -m backtest.agent_loop
-
-# ค้นหาค่าพารามิเตอร์ที่ดีที่สุดด้วย Optuna (Hyperparameter Optimization)
-python -m backtest.optimize --n-trials 100 --n-seeds 5
-```
-
-## การตั้งค่า (Configuration)
-
-พารามิเตอร์ทั้งหมดสามารถตั้งค่าได้ที่ไฟล์ `config.py` ค่าที่สำคัญมีดังนี้:
-
-| พารามิเตอร์ | ค่าเริ่มต้น | คำอธิบาย |
+| File | Purpose | Current phase |
 |---|---|---|
-| `strategy_mode` | `"avellaneda"` | `"avellaneda"` หรือ `"volatility"` |
-| `gamma` | `0.034` | ระดับการหลีกเลี่ยงความเสี่ยง (ค่ายิ่งสูง → Spread ยิ่งกว้าง) |
-| `k` | `2.586` | พารามิเตอร์สภาพคล่องของ Order book |
-| `initial_capital` | `300.0` | เงินต้นเริ่มต้น (USDT) |
-| `fixed_lot_size` | `0.01` | ขนาดออเดอร์คงที่ (ห้ามเปลี่ยน) |
-| `max_inventory_lots` | `1` | จำนวนล็อตสูงสุดที่ถือได้ |
-| `max_drawdown_pct` | `0.031` | จุดตัดการทำงาน (Kill-switch) เมื่อขาดทุน ~3.1% |
-| `leverage` | `1.0` | ตัวคูณ Leverage |
-| `sleeptime` | `0.5` | เวลาหน่วงระหว่างแต่ละรอบการทำงาน (วินาที) |
+| `requirements-runtime.txt` | Original async runtime dependencies | Legacy; not an authorized execution path |
+| `requirements-offline-test.txt` | R0 local test/backtest dependencies | Permitted only within active R0 rules |
+| `requirements-research-disabled.txt` | Optuna research dependencies | Installed only with separate authorization; do not execute/import now |
 
-## ความปลอดภัย
+`requirements.txt` intentionally points to the offline-test set rather than installing Optuna by default.
 
-- **Kill-switch**: จะหยุดการส่งคำสั่งตั้งราคาทั้งหมด เมื่อ Drawdown สูงเกินเกณฑ์ที่ตั้งไว้
-- บอทจะทำการยกเลิกออเดอร์ทั้งหมดก่อนที่ระบบจะปิดตัวลง (ไม่ว่าจะปิดปกติ หรือโปรแกรม Crash)
-- สถานะต่างๆ จะถูกบันทึกไว้อย่างต่อเนื่อง เพื่อให้สามารถกู้คืนระบบได้หลังการ Crash
-- มีระบบจำกัดการส่งคำสั่ง (Rate limiting) เพื่อป้องกันไม่ให้ถูกแบนจากกระดานเทรด
-- บอทจะไม่ส่งคำสั่งที่มีราคาหรือขนาดที่ไม่ถูกต้องตามขั้นต่ำของตลาด (Tick/Lot size)
+## Legacy components
 
-## ข้อจำกัดความรับผิดชอบ (Disclaimer)
+`main.py` and `trading_bot.py` form an older CCXT async runtime. `strategy.py` is an older Lumibot implementation. They are retained for reference while the successor stack is the canonical research and safety path; neither is a current authorized entry point.
 
-บอทเทรดนี้สร้างขึ้นเพื่อวัตถุประสงค์ในการศึกษาและการวิจัยเท่านั้น การซื้อขายคริปโตเคอร์เรนซีมีความเสี่ยงสูงมาก โปรดเริ่มต้นด้วยโหมด Sandbox/Demo เสมอ และอย่าเสี่ยงด้วยเงินที่คุณไม่สามารถสูญเสียได้
+`main.py` now fails closed before loading configuration or dotenv. The retained
+`bot_state.json` belongs to this legacy runtime and contains stale non-zero
+inventory; do not reset, consume, or treat it as current account truth without
+a separately authorized reconciliation.
+
+## Evidence retention
+
+Do not modify or remove the immutable predecessor package:
+
+```text
+artifacts/okx_demo_multi_session_economic_soak/packages/economic-package-20260818T125221Z/
+```
+
+Historical artifacts are not runtime dependencies, but must be retained or externally archived with a manifest and verified hashes before cleanup. Do not bulk-delete `artifacts/`.
+
+## Next boundary
+
+After fresh R0 evidence passes every mandatory gate, obtain separate exact user authorization before preparing fresh R1 identities. R1 preparation, R1 preflight, and R2 economic campaign are separate phases; none authorizes production.

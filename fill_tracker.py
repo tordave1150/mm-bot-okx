@@ -9,10 +9,14 @@ detection (wired in strategy.py).
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 import time
 from dataclasses import dataclass, field
+from typing import Literal
 
 from config import Config
+from market_spec import MarketSpec
+from fill_classification import CanonicalFillClassification
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,9 @@ class Fill:
     timestamp: float    # Unix seconds
     fee: float = 0.0
     fee_currency: str = ""
+    liquidity: Literal["maker", "taker"] = "maker"
+    reason: str = "strategy"
+    classification: CanonicalFillClassification | None = None
 
 
 class FillTracker:
@@ -57,6 +64,7 @@ class FillTracker:
 
         # ── P&L tracking ────────────────────────────────────────────────
         self.realized_pnl: float = 0.0
+        self.gross_realized_pnl: float = 0.0
         self.total_fees: float = 0.0
 
         # ── Position tracking (for P&L attribution) ─────────────────────
@@ -90,7 +98,9 @@ class FillTracker:
     def avg_entry_price(self) -> float:
         return self._avg_entry_price
 
-    def detect_fills(self, exchange, symbol: str) -> list[Fill]:
+    def detect_fills(
+        self, exchange, symbol: str, market_spec: MarketSpec
+    ) -> list[Fill]:
         """Check exchange for new fills not yet tracked.
 
         Uses ``fetch_my_trades`` with a limit to get recent trades and
@@ -118,16 +128,7 @@ class FillTracker:
                 if not fill_id or fill_id in self._known_fill_ids:
                     continue
 
-                fill = Fill(
-                    fill_id=fill_id,
-                    order_id=trade.get("order", ""),
-                    side=trade.get("side", "unknown"),
-                    price=float(trade.get("price", 0)),
-                    size=float(trade.get("amount", 0)),
-                    timestamp=float(trade.get("timestamp", 0)) / 1000.0,
-                    fee=float(trade.get("fee", {}).get("cost", 0) or 0),
-                    fee_currency=trade.get("fee", {}).get("currency", ""),
-                )
+                fill = self._fill_from_exchange_trade(trade, market_spec)
 
                 new_fills.append(fill)
                 self._known_fill_ids.add(fill_id)
@@ -149,7 +150,9 @@ class FillTracker:
 
         return new_fills
 
-    def process_ws_fill(self, trade: dict) -> Fill | None:
+    def process_ws_fill(
+        self, trade: dict, market_spec: MarketSpec
+    ) -> Fill | None:
         """Process a fill received via WebSocket (watch_my_trades).
 
         Same structure as a CCXT trade dict.
@@ -158,20 +161,43 @@ class FillTracker:
         if not fill_id or fill_id in self._known_fill_ids:
             return None
 
-        fill = Fill(
-            fill_id=fill_id,
-            order_id=trade.get("order", ""),
-            side=trade.get("side", "unknown"),
-            price=float(trade.get("price", 0)),
-            size=float(trade.get("amount", 0)),
-            timestamp=float(trade.get("timestamp", 0)) / 1000.0,
-            fee=float(trade.get("fee", {}).get("cost", 0) or 0),
-            fee_currency=trade.get("fee", {}).get("currency", ""),
-        )
+        fill = self._fill_from_exchange_trade(trade, market_spec)
 
         self._known_fill_ids.add(fill_id)
         self._process_fill(fill)
         return fill
+
+    def _fill_from_exchange_trade(
+        self, trade: dict, market_spec: MarketSpec
+    ) -> Fill:
+        """Convert exchange contracts and fees to canonical base/quote units."""
+        if not market_spec.linear or market_spec.inverse:
+            raise ValueError("Only linear contract fills are supported")
+        price = float(trade.get("price", 0))
+        contracts = Decimal(str(trade.get("amount", 0)))
+        base_size = float(market_spec.contracts_to_base(contracts))
+        fee_data = trade.get("fee") or {}
+        fee_cost = float(fee_data.get("cost", 0) or 0)
+        fee_currency = str(fee_data.get("currency", "") or "").upper()
+        pair = market_spec.symbol.split(":", 1)[0]
+        base_currency, quote_currency = pair.split("/", 1)
+        if fee_cost and fee_currency == base_currency.upper():
+            fee_quote = fee_cost * price
+        elif not fee_cost or fee_currency in {"", quote_currency.upper(), "USDT", "USDC"}:
+            fee_quote = fee_cost
+        else:
+            raise ValueError(f"Unsupported fee currency {fee_currency!r}")
+        return Fill(
+            fill_id=str(trade.get("id", "")),
+            order_id=str(trade.get("order", "")),
+            side=str(trade.get("side", "unknown")),
+            price=price,
+            size=base_size,
+            timestamp=float(trade.get("timestamp", 0)) / 1000.0,
+            fee=fee_quote,
+            fee_currency=quote_currency,
+            liquidity=("taker" if trade.get("takerOrMaker") == "taker" else "maker"),
+        )
 
     def process_fill(self, fill: Fill) -> None:
         """Process a fill — public API for backtest matching engine."""
@@ -183,6 +209,8 @@ class FillTracker:
         realized_pnl: float,
         position: float,
         avg_entry_price: float,
+        gross_realized_pnl: float | None = None,
+        total_fees: float | None = None,
     ) -> None:
         """Restore tracker state from persisted data.
 
@@ -190,6 +218,11 @@ class FillTracker:
         """
         self._known_fill_ids = known_fill_ids
         self.realized_pnl = realized_pnl
+        self.gross_realized_pnl = (
+            realized_pnl if gross_realized_pnl is None else gross_realized_pnl
+        )
+        if total_fees is not None:
+            self.total_fees = total_fees
         self._position = position
         self._avg_entry_price = avg_entry_price
 
@@ -246,6 +279,7 @@ class FillTracker:
             else:
                 realized = reduce_size * (self._avg_entry_price - fill.price)
 
+            self.gross_realized_pnl += realized
             self.realized_pnl += realized - fill.fee
 
             # If position flipped, set new avg entry to fill price

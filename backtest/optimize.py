@@ -74,27 +74,26 @@ def objective(
     )
 
     # ── Sample hyperparameters ───────────────────────────────────────────
-    # NEVER suggest fixed_lot_size or order_size_base
-    gamma = trial.suggest_float("gamma", 0.01, 1.0, log=True)
-    k = trial.suggest_float("k", 0.5, 5.0)
-    tau = trial.suggest_float("tau", 0.5, 2.0)
+    # NEVER suggest fixed_lot_size, max_drawdown_pct, leverage, or capital
+    # NEVER suggest max_inventory_lots during main search (fixed at 1)
+    gamma = trial.suggest_float("gamma", 0.01, 0.50, log=True)
+    k = trial.suggest_float("k", 0.80, 5.00)
+    tau = trial.suggest_float("tau", 0.50, 1.50)
 
-    # Lot-based inventory (AGENTS.md §13.2)
-    max_inventory_lots = trial.suggest_int("max_inventory_lots", 1, 3)
+    # max_inventory_lots fixed at 1 per AGENTS.md §7
+    max_inventory_lots = 1
 
-    max_drawdown_pct = trial.suggest_float("max_drawdown_pct", 0.03, 0.15)
+    # Regime adjustments (AGENTS.md §8)
+    trend_spread_mult = trial.suggest_float("trend_spread_multiplier", 1.20, 3.50)
+    trend_size_mult = trial.suggest_float("trend_size_multiplier", 0.20, 0.80)
+    range_spread_mult = trial.suggest_float("range_spread_multiplier", 0.70, 1.30)
 
-    # Regime adjustments
-    trend_spread_mult = trial.suggest_float("trend_spread_multiplier", 1.0, 3.0)
-    trend_size_mult = trial.suggest_float("trend_size_multiplier", 0.2, 1.0)
-    range_spread_mult = trial.suggest_float("range_spread_multiplier", 0.5, 1.2)
+    # Skew factors (AGENTS.md §8)
+    imbalance_skew = trial.suggest_float("imbalance_skew_factor", 0.00, 0.80)
+    inventory_skew = trial.suggest_float("inventory_skew_factor", 0.50, 2.50)
 
-    # Skew factors
-    imbalance_skew = trial.suggest_float("imbalance_skew_factor", 0.0, 2.0)
-    inventory_skew = trial.suggest_float("inventory_skew_factor", 0.5, 3.0)
-
-    # EMA span for volatility
-    ema_span = trial.suggest_int("ema_span", 10, 50)
+    # EMA span for volatility (AGENTS.md §8)
+    ema_span = trial.suggest_int("ema_span", 12, 40)
 
     # ── Build config with sampled params ─────────────────────────────────
     cfg = replace(
@@ -103,7 +102,7 @@ def objective(
         k=k,
         tau=tau,
         max_inventory_lots=max_inventory_lots,
-        max_drawdown_pct=max_drawdown_pct,
+        # max_drawdown_pct NEVER overridden — use base_cfg default
         trend_spread_multiplier=trend_spread_mult,
         trend_size_multiplier=trend_size_mult,
         range_spread_multiplier=range_spread_mult,
@@ -378,8 +377,8 @@ def main() -> None:
 
     # ── Top 5 trials ─────────────────────────────────────────────────────
     print("  Top 5 Trials:")
-    print("  " + "-" * 56)
-    print(f"  {'#':>4}  {'Score':>10}  {'gamma':>8}  {'k':>6}  {'inv_lots':>8}  {'dd_lim':>7}")
+    print("  " + "-" * 60)
+    print(f"  {'#':>4}  {'Score':>10}  {'gamma':>8}  {'k':>6}  {'tau':>6}  {'ema':>5}")
     for t in sorted(study.trials, key=lambda t: t.value if t.value is not None else -999, reverse=True)[:5]:
         if t.value is None:
             continue
@@ -387,7 +386,7 @@ def main() -> None:
         print(
             f"  {t.number:>4}  {t.value:>10.4f}  "
             f"{p.get('gamma', 0):>8.4f}  {p.get('k', 0):>6.2f}  "
-            f"{p.get('max_inventory_lots', 0):>8}  {p.get('max_drawdown_pct', 0):>7.2%}"
+            f"{p.get('tau', 0):>6.2f}  {p.get('ema_span', 0):>5}"
         )
     print()
 

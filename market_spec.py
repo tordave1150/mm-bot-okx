@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_DOWN, ROUND_UP, InvalidOperation
+import hashlib
+import json
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,67 @@ class MarketSpec:
     price_precision: int | None    # Decimal places for price, or None
     linear: bool                   # True for linear (USDT-margined) contracts
     inverse: bool                  # True for inverse (coin-margined) contracts
+
+    def to_dict(self) -> dict[str, str | bool | int | None]:
+        """Return a stable JSON-serializable representation."""
+        return {
+            "symbol": self.symbol,
+            "contract_size": str(self.contract_size),
+            "amount_step": str(self.amount_step),
+            "min_amount": str(self.min_amount),
+            "min_notional": str(self.min_notional) if self.min_notional is not None else None,
+            "price_tick": str(self.price_tick),
+            "amount_precision": self.amount_precision,
+            "price_precision": self.price_precision,
+            "linear": self.linear,
+            "inverse": self.inverse,
+        }
+
+    @property
+    def fingerprint(self) -> str:
+        payload = json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    # ── Canonical quantity conversion ──────────────────────────────────
+
+    def contracts_to_base(self, contracts: Decimal) -> Decimal:
+        """Convert exchange contract amount to base-asset quantity."""
+        if contracts < 0:
+            raise OrderValidationError("contracts must be non-negative")
+        if self.linear or self.inverse:
+            return contracts * self.contract_size
+        return contracts
+
+    def base_to_contracts(self, base_quantity: Decimal, *, exact: bool = True) -> Decimal:
+        """Convert internal base quantity to exchange contracts.
+
+        When ``exact`` is true, reject quantities that cannot be represented by
+        the exchange amount step instead of silently changing exposure.
+        """
+        if base_quantity < 0:
+            raise OrderValidationError("base quantity must be non-negative")
+        raw = (
+            base_quantity / self.contract_size
+            if (self.linear or self.inverse) and self.contract_size > 0
+            else base_quantity
+        )
+        rounded = self.round_amount_down(raw)
+        if exact and rounded != raw:
+            raise OrderValidationError(
+                f"Base quantity {base_quantity} maps to {raw} contracts, "
+                f"which is not aligned to amount step {self.amount_step}"
+            )
+        return rounded
+
+    def compute_base_notional(self, price: Decimal, base_quantity: Decimal) -> Decimal:
+        """Compute quote notional from the canonical internal base quantity."""
+        if price <= 0 or base_quantity < 0:
+            return Decimal("0")
+        if self.inverse:
+            raise OrderValidationError(
+                "Inverse-contract base-notional conversion is not implemented"
+            )
+        return price * base_quantity
 
     # ── Price rounding ──────────────────────────────────────────────────
 
@@ -116,12 +179,18 @@ def validate_order(
     maker_fee_rate: Decimal,
     taker_fee_rate: Decimal,
     safety_buffer: Decimal = Decimal("0.05"),
+    reduce_only: bool = False,
+    reserved_margin: Decimal = Decimal("0"),
+    emergency_reserve: Decimal = Decimal("0"),
 ) -> None:
     """Validate an order against all pre-submission checks (AGENTS.md §6).
 
     Raises OrderValidationError if any check fails.
     """
     errors: list[str] = []
+
+    if side not in {"buy", "sell"}:
+        errors.append(f"Side must be 'buy' or 'sell', got {side!r}")
 
     # Price must be positive
     if price <= 0:
@@ -173,26 +242,43 @@ def validate_order(
             )
 
     # Post-fill inventory check
-    signed_amount = amount if side == "buy" else -amount
+    base_amount = spec.contracts_to_base(amount) if amount > 0 else Decimal("0")
+    signed_amount = base_amount if side == "buy" else -base_amount
     post_fill_inventory = current_inventory + signed_amount
     if abs(post_fill_inventory) > max_inventory:
         errors.append(
             f"Post-fill inventory {post_fill_inventory} would exceed "
             f"max inventory {max_inventory}"
         )
+    if reduce_only:
+        if current_inventory == 0:
+            errors.append("Reduce-only order requires a non-zero position")
+        elif current_inventory > 0 and side != "sell":
+            errors.append("Reduce-only long position must use sell side")
+        elif current_inventory < 0 and side != "buy":
+            errors.append("Reduce-only short position must use buy side")
+        elif base_amount > abs(current_inventory):
+            errors.append(
+                f"Reduce-only amount {base_amount} exceeds position {abs(current_inventory)}"
+            )
 
     # Margin sufficiency check
-    if price > 0 and amount > 0:
+    if price > 0 and amount > 0 and not reduce_only:
         required_margin = spec.compute_required_margin(price, amount, leverage)
         estimated_fee = spec.estimate_fee(
             price, amount, is_maker=True,
             maker_rate=maker_fee_rate, taker_rate=taker_fee_rate,
         )
-        total_required = required_margin + estimated_fee + safety_buffer
+        total_required = (
+            reserved_margin + required_margin + estimated_fee
+            + emergency_reserve + safety_buffer
+        )
         if total_required > available_equity:
             errors.append(
                 f"Insufficient equity: need {total_required} "
-                f"(margin={required_margin} + fee={estimated_fee} + buffer={safety_buffer}), "
+                f"(reserved={reserved_margin} + margin={required_margin} + "
+                f"fee={estimated_fee} + emergency={emergency_reserve} + "
+                f"buffer={safety_buffer}), "
                 f"have {available_equity}"
             )
 
@@ -202,7 +288,12 @@ def validate_order(
         raise OrderValidationError(msg)
 
 
-def build_market_spec(exchange: Any, symbol: str) -> MarketSpec:
+def build_market_spec(
+    exchange: Any,
+    symbol: str,
+    *,
+    allow_fallback: bool = True,
+) -> MarketSpec:
     """Build a MarketSpec from exchange market metadata.
 
     Loads markets from the exchange and extracts all relevant fields.
@@ -234,17 +325,18 @@ def build_market_spec(exchange: Any, symbol: str) -> MarketSpec:
         raw_price_prec = precision.get("price")
         raw_amount_prec = precision.get("amount")
 
-        # Determine tick/step from limits first (more reliable), fall back to precision
+        # Precision describes tick/step. Limits describe admissible minima and
+        # must not be mistaken for increments.
         limits = market.get("limits", {})
 
         price_limits = limits.get("price", {})
         amount_limits = limits.get("amount", {})
 
         # Price tick
-        price_tick = _resolve_step(raw_price_prec, price_limits.get("min"), default="0.1")
+        price_tick = _resolve_step(raw_price_prec, None, default="0.1")
 
         # Amount step
-        amount_step = _resolve_step(raw_amount_prec, amount_limits.get("min"), default="0.001")
+        amount_step = _resolve_step(raw_amount_prec, None, default="1")
 
         # Min amount
         min_amount_val = amount_limits.get("min")
@@ -275,12 +367,14 @@ def build_market_spec(exchange: Any, symbol: str) -> MarketSpec:
         return spec
 
     except Exception:
-        logger.exception("Failed to build MarketSpec for %s; using defaults", symbol)
+        if not allow_fallback:
+            raise
+        logger.exception("Failed to build MarketSpec for %s; using diagnostic defaults", symbol)
         return MarketSpec(
             symbol=symbol,
             contract_size=Decimal("0.01"),
-            amount_step=Decimal("0.01"),
-            min_amount=Decimal("0.01"),
+            amount_step=Decimal("1"),
+            min_amount=Decimal("1"),
             min_notional=Decimal("5"),
             price_tick=Decimal("0.1"),
             amount_precision=None,

@@ -33,6 +33,9 @@ from typing import Literal
 
 import numpy as np
 
+_CRYPTO_DAYS_PER_YEAR = 365
+_DEFAULT_START_TIMESTAMP_MS = 1_700_000_000_000
+
 # ── Optional dependency: arch (GARCH) ────────────────────────────────────────
 try:
     from arch import arch_model
@@ -107,7 +110,7 @@ def _build_tick(
         ts_ms = int(time.time() * 1000)
 
     # Spread widens with volatility: base 0.01% + 2× vol-adjusted premium
-    spread_bps = 1.0 + 200.0 * (vol_annual / math.sqrt(252))
+    spread_bps = 1.0 + 200.0 * (vol_annual / math.sqrt(_CRYPTO_DAYS_PER_YEAR))
     half_spread = mid_price * spread_bps / 20_000.0  # bps → fraction → half
 
     best_bid = mid_price - half_spread
@@ -166,6 +169,7 @@ def generate_regime_switching_gbm(
     ticks_per_day: int = 288,   # 5-minute ticks
     start_price: float = 50_000.0,
     seed: int | None = None,
+    start_timestamp_ms: int = _DEFAULT_START_TIMESTAMP_MS,
 ) -> list[dict]:
     """Generate synthetic order book ticks via regime-switching GBM + jumps.
 
@@ -196,11 +200,12 @@ def generate_regime_switching_gbm(
     rng = np.random.default_rng(seed)
 
     vol_annual = vol_weekly * math.sqrt(52)
-    dt = 1.0 / (252 * ticks_per_day)   # time step in years
+    dt = 1.0 / (_CRYPTO_DAYS_PER_YEAR * ticks_per_day)
     vol_dt = vol_annual * math.sqrt(dt)
 
     n_ticks = n_days * ticks_per_day
-    start_ts_ms = int(time.time() * 1000) - n_ticks * 5 * 60 * 1000  # backfill
+    tick_interval_ms = round(86_400_000 / ticks_per_day)
+    start_ts_ms = start_timestamp_ms
 
     # Regime drift parameters (per-tick log-drift)
     _regime_drift = {
@@ -249,7 +254,7 @@ def generate_regime_switching_gbm(
         log_return = drift + vol_factor * vol_dt * dW
 
         # Poisson jump
-        if rng.random() < jump_freq * dt * 252:  # per-tick jump probability
+        if rng.random() < jump_freq / ticks_per_day:
             jump_direction = rng.choice([-1, 1])
             jump = jump_direction * abs(rng.normal(0, jump_size))
             log_return += jump
@@ -257,7 +262,7 @@ def generate_regime_switching_gbm(
         price = price * math.exp(log_return)
         price = max(price, 1.0)  # prevent negative/zero prices
 
-        ts_ms = start_ts_ms + i * 5 * 60 * 1000
+        ts_ms = start_ts_ms + i * tick_interval_ms
         effective_vol = vol_annual * _regime_vol_mult[regime]
 
         tick = _build_tick(
@@ -281,6 +286,7 @@ def generate_block_bootstrap(
     ticks_per_day: int = 288,
     start_price: float = 50_000.0,
     seed: int | None = None,
+    start_timestamp_ms: int = _DEFAULT_START_TIMESTAMP_MS,
 ) -> list[dict]:
     """Generate ticks by resampling blocks from historical log-return arrays.
 
@@ -327,7 +333,8 @@ def generate_block_bootstrap(
 
     # Interpolate intraday ticks from daily returns
     n_ticks = n_days * ticks_per_day
-    start_ts_ms = int(time.time() * 1000) - n_ticks * 5 * 60 * 1000
+    tick_interval_ms = round(86_400_000 / ticks_per_day)
+    start_ts_ms = start_timestamp_ms
 
     price = start_price
     ticks: list[dict] = []
@@ -336,7 +343,7 @@ def generate_block_bootstrap(
     for day_idx, daily_ret in enumerate(daily_returns):
         # Spread daily return across ticks (with intraday noise)
         intraday_drift = daily_ret / ticks_per_day
-        intraday_vol = daily_vol / math.sqrt(252 * ticks_per_day)
+        intraday_vol = daily_vol / math.sqrt(_CRYPTO_DAYS_PER_YEAR * ticks_per_day)
 
         for t in range(ticks_per_day):
             noise = rng.normal(0, intraday_vol)
@@ -347,10 +354,10 @@ def generate_block_bootstrap(
             imbalance = float(np.sign(daily_ret)) * 0.2 + rng.normal(0, 0.1)
             imbalance = float(np.clip(imbalance, -1.0, 1.0))
 
-            ts_ms = start_ts_ms + tick_idx * 5 * 60 * 1000
+            ts_ms = start_ts_ms + tick_idx * tick_interval_ms
             tick = _build_tick(
                 mid_price=price,
-                vol_annual=daily_vol * math.sqrt(252),
+                vol_annual=daily_vol * math.sqrt(_CRYPTO_DAYS_PER_YEAR),
                 imbalance=imbalance,
                 ts_ms=ts_ms,
                 rng=rng,
@@ -368,6 +375,7 @@ def generate_garch_path(
     n_days: int = 30,
     ticks_per_day: int = 288,
     seed: int | None = None,
+    start_timestamp_ms: int = _DEFAULT_START_TIMESTAMP_MS,
 ) -> list[dict]:
     """Fit GARCH(1,1) to historical prices and simulate a new path.
 
@@ -410,6 +418,7 @@ def generate_garch_path(
             ticks_per_day=ticks_per_day,
             start_price=start_price,
             seed=seed,
+            start_timestamp_ms=start_timestamp_ms,
         )
 
     # Fit GARCH(1,1) — use percentage returns for numerical stability
@@ -423,7 +432,8 @@ def generate_garch_path(
     sim = res.model.simulate(res.params, n_total)
     simulated_pct_returns = sim["data"].values / 100.0  # back to log-returns
 
-    start_ts_ms = int(time.time() * 1000) - n_total * 5 * 60 * 1000
+    tick_interval_ms = round(86_400_000 / ticks_per_day)
+    start_ts_ms = start_timestamp_ms
     price = start_price
     ticks: list[dict] = []
 
@@ -433,12 +443,12 @@ def generate_garch_path(
 
         # Use simulated conditional vol for spread sizing
         cond_vol_pct = float(sim["volatility"].iloc[i]) / 100.0
-        annual_vol = cond_vol_pct * math.sqrt(252 * ticks_per_day)
+        annual_vol = cond_vol_pct * math.sqrt(_CRYPTO_DAYS_PER_YEAR * ticks_per_day)
 
         imbalance = float(rng.normal(0, 0.15))
         imbalance = float(np.clip(imbalance, -1.0, 1.0))
 
-        ts_ms = start_ts_ms + i * 5 * 60 * 1000
+        ts_ms = start_ts_ms + i * tick_interval_ms
         tick = _build_tick(
             mid_price=price,
             vol_annual=annual_vol,

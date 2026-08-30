@@ -78,7 +78,7 @@ class MarketState:
     mid_price: float = 0.0
     microprice: float = 0.0       # Size-weighted mid
     spread: float = 0.0
-    volatility: float = 0.0       # EWMA of absolute log-returns
+    volatility: float = 0.0       # EWMA per-tick log-return standard deviation
     order_book_imbalance: float = 0.0  # (-1, 1) — positive = bid-heavy
 
     # ── Regime (set externally by RegimeDetector) ───────────────────────
@@ -239,13 +239,15 @@ class MarketState:
             self.order_book_imbalance = 0.0
 
         # Price history
-        self._price_history.append((time.time(), self.mid_price))
+        history_ts = self.last_exchange_ts if self.last_exchange_ts > 0 else time.time()
+        self._price_history.append((history_ts, self.mid_price))
 
-        # Volatility (EWMA of absolute log-returns)
+        # Volatility: square root of EWMA log-return variance. The value is a
+        # dimensionless per-observation return standard deviation.
         if self._prev_mid > 0 and self.mid_price > 0:
             log_return = math.log(self.mid_price / self._prev_mid)
-            self._vol_ema.update(abs(log_return))
+            self._vol_ema.update(log_return * log_return)
             if self._vol_ema.value is not None:
-                self.volatility = self._vol_ema.value
+                self.volatility = math.sqrt(max(self._vol_ema.value, 0.0))
 
         self._prev_mid = self.mid_price
