@@ -28,6 +28,7 @@ FILL_HISTORY_PAGINATION_CALLS = 3
 FILL_RECENT_TAIL_LIMIT = 100
 CANCEL_RECONCILIATION_READ_ATTEMPTS = 3
 CANCEL_RECONCILIATION_INTERVAL_SECONDS = 2
+FILL_RECONCILIATION_TIMESTAMP_SKEW_MS = 1_500
 
 
 class FormalGatewayError(RuntimeError):
@@ -223,6 +224,7 @@ class FormalDemoGateway:
         self.fill_union_duplicates = 0
         self.fill_union_conflicts = 0
         self.last_fill_union_audit: dict[str, int] = {}
+        self.targeted_order_fill_queries = 0
         self.cancel_fill_since_ms = 0
         self.cancel_reconciliation_read_attempts = (
             CANCEL_RECONCILIATION_READ_ATTEMPTS
@@ -592,6 +594,54 @@ class FormalDemoGateway:
             key=lambda row: (int(row.get("timestamp") or 0), str(row.get("id") or "")),
         ))
 
+    def fetch_targeted_order_trades(
+        self,
+        *,
+        order_id: str,
+        client_order_id: str,
+        since_ms: int,
+    ) -> tuple[dict[str, Any], ...]:
+        """Read-only proof for a terminal order fill missing from the broad union.
+
+        A client id is unique to one session.  Still, require both the exchange
+        order id and client id in every returned row, and allow only the frozen
+        1500 ms clock-skew window below the durable cursor.  This never turns a
+        terminal order claim into a synthetic fill.
+        """
+        if not order_id or not client_order_id or since_ms <= 0:
+            raise FormalGatewayError("targeted order-fill identity is invalid")
+        rows = self._read(
+            "fetch_my_trades",
+            SYMBOL,
+            max(1, since_ms - FILL_RECONCILIATION_TIMESTAMP_SKEW_MS),
+            FILL_RECENT_TAIL_LIMIT,
+            {"ordId": order_id},
+        )
+        self.targeted_order_fill_queries += 1
+        if not isinstance(rows, list):
+            raise FormalGatewayError("targeted order-fill query result is malformed")
+        eligible: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                raise FormalGatewayError("targeted order-fill row is malformed")
+            # Validate all quantity, fee and liquidity fields before the row can
+            # contribute to reconciliation.
+            self._trade_fingerprint(row)
+            if (
+                str(row.get("order") or "") != order_id
+                or self.client_order_id(row) != client_order_id
+            ):
+                continue
+            if int(row.get("timestamp") or 0) < (
+                since_ms - FILL_RECONCILIATION_TIMESTAMP_SKEW_MS
+            ):
+                continue
+            eligible.append(row)
+        return tuple(sorted(
+            eligible,
+            key=lambda row: (int(row.get("timestamp") or 0), str(row.get("id") or "")),
+        ))
+
     @staticmethod
     def _trade_fingerprint(row: dict[str, Any]) -> tuple[object, ...]:
         info = row.get("info") or {}
@@ -831,6 +881,7 @@ class FormalDemoGateway:
 
         absence_streak = {client_id: 0 for client_id in expected}
         classifications: dict[str, str] = {}
+        targeted_order_fill_audit: dict[str, dict[str, object]] = {}
         attempts_used = 0
         for attempt in range(1, self.cancel_reconciliation_read_attempts + 1):
             attempts_used = attempt
@@ -870,6 +921,10 @@ class FormalDemoGateway:
                     )
                     if isinstance(fetched, dict):
                         order = fetched
+                        # If the order disappeared before the first open-order
+                        # snapshot, only the terminal order read can supply the
+                        # exchange order id for a targeted proof query.
+                        order_id = str(order.get("id") or order_id)
                         status = str(
                             fetched.get("status")
                             or (fetched.get("info") or {}).get("state")
@@ -904,6 +959,22 @@ class FormalDemoGateway:
                 original_amount = Decimal(str(
                     original.get("amount") or order.get("amount") or 0
                 ))
+                order_filled_amount = Decimal(str(order.get("filled") or 0))
+                if terminal_fill_claimed and order_filled_amount > 0 and not rows:
+                    targeted_rows = self.fetch_targeted_order_trades(
+                        order_id=order_id,
+                        client_order_id=client_id,
+                        since_ms=self.cancel_fill_since_ms,
+                    )
+                    rows = list(targeted_rows)
+                    targeted_order_fill_audit[client_id] = {
+                        "attempt": attempt,
+                        "query_used": True,
+                        "matched_rows": len(rows),
+                        "timestamp_tolerance_ms": FILL_RECONCILIATION_TIMESTAMP_SKEW_MS,
+                        "order_id_bound": True,
+                        "client_order_id_bound": True,
+                    }
                 filled_amount = sum(
                     (Decimal(str(row.get("amount") or 0)) for row in rows),
                     Decimal("0"),
@@ -911,7 +982,6 @@ class FormalDemoGateway:
                 full_fill_proven = (
                     original_amount > 0 and filled_amount >= original_amount
                 )
-                order_filled_amount = Decimal(str(order.get("filled") or 0))
                 terminal_fill_proven = terminal_fill_claimed and full_fill_proven
                 if terminal_cancel:
                     classifications[client_id] = (
@@ -964,6 +1034,8 @@ class FormalDemoGateway:
             "classifications": classifications,
             "history_recent_tail_union_used": self.cancel_fill_since_ms > 0,
             "fill_union_audit": dict(self.last_fill_union_audit),
+            "targeted_order_fill_queries": self.targeted_order_fill_queries,
+            "targeted_order_fill_audit": targeted_order_fill_audit,
             "resolved": not unresolved,
         }
         if unresolved:
@@ -1031,6 +1103,7 @@ class FormalDemoGateway:
             "fill_recent_tail_queries": self.fill_recent_tail_queries,
             "fill_union_duplicates": self.fill_union_duplicates,
             "fill_union_conflicts": self.fill_union_conflicts,
+            "targeted_order_fill_queries": self.targeted_order_fill_queries,
             "last_fill_union_audit": dict(self.last_fill_union_audit),
             "last_cancel_reconciliation_audit": dict(
                 self.last_cancel_reconciliation_audit

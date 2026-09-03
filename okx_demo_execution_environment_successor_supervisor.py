@@ -16,6 +16,13 @@ R0_EVIDENCE_KINDS = frozenset({
     REPAIR_KIND,
     "r2_session5_terminal_reconciliation_r0_offline_repair",
     "r2_session1_cancel_fill_reconciliation_r0_offline_repair",
+    "r2_session1_special_closure_reconciliation_r0_offline_repair",
+    "r2_session5_special_quantity_reconciliation_r0_offline_repair",
+    "r2_session1_interruption_audit_r0_offline",
+    "r1_clock_skew_r0_offline_repair",
+    "r2_terminal_workoff_r0_offline_repair",
+    "r2_terminal_workoff_v2_r0_offline_repair",
+    "r2_session5_clock_skew_interruption_audit_r0_offline",
 })
 READY_STATUS = "R2_SUCCESSOR_PACKAGE_READY"
 

@@ -899,7 +899,9 @@ class CampaignSupervisor:
                 failed.get("unclassified_quote_mode_ticks", 0)
             ),
             "special_flatten_sessions": (
-                1 if int(failed.get("special_fill_count", 0)) > 0 else 0
+                # This is a session-level rate.  A single reduce-only
+                # flatten can settle in several special fills.
+                1 if int(gateway_audit.get("flatten_dispatches", 0)) > 0 else 0
             ),
             "unsafe_sessions": 1,
         }

@@ -10,7 +10,9 @@ import pytest
 import okx_demo_multi_session_prepare as prepare_module
 from okx_demo_multi_session_prepare import (
     A2PackageError,
+    _admissible_r0_for_r2,
     _identifiers,
+    _predecessor_r0_evidence_id,
     _verify_a1,
     prepare,
 )
@@ -88,10 +90,12 @@ def test_identifiers_predeclare_exactly_twelve_unique_bound_sessions() -> None:
 
 def test_successor_risk_budget_changes_economic_policy_without_risk_expansion() -> None:
     budget = prepare_module._risk_budget()
-    assert budget["economic_repair_version"] == "r0-sample-efficiency-v1"
+    assert budget["economic_repair_version"] == "r0-terminal-workoff-v2"
     assert budget["minimum_half_spread_bps"] == "4.0"
     assert budget["balanced_quote_retention_threshold_ticks"] == 10
     assert budget["defense_quote_retention_threshold_ticks"] == 20
+    assert budget["draining_workoff_max_quote_observations"] == 6
+    assert budget["draining_workoff_max_refreshes"] == 3
     assert budget["session_wall_minutes"] == 30
     assert budget["session_normal_create_cap"] == 60
     assert budget["admission_create_cap"] == 48
@@ -99,6 +103,58 @@ def test_successor_risk_budget_changes_economic_policy_without_risk_expansion() 
     assert budget["maximum_inventory_btc"] == "0.01"
     assert budget["leverage"] == 3
     assert budget["ambiguous_mutation_retry_attempts"] == 0
+
+
+def test_v2_terminal_workoff_r0_admission_is_exact_and_fail_closed() -> None:
+    accepted = {
+        "passed": True,
+        "evidence_kind": "r2_terminal_workoff_v2_r0_offline_repair",
+        "failed_campaign_decision": "NOT_READY",
+        "terminal_account_authoritative": True,
+        "resume_authorized": False,
+    }
+    assert _admissible_r0_for_r2(accepted) is True
+    assert _admissible_r0_for_r2({
+        **accepted, "terminal_account_authoritative": False,
+    }) is False
+    assert _predecessor_r0_evidence_id(accepted) is None
+    assert _predecessor_r0_evidence_id({
+        **accepted,
+        "offline_run_id": "r2-terminal-workoff-v2-repair-offline-fixture",
+    }) == "r2-terminal-workoff-v2-repair-offline-fixture"
+
+
+def test_clock_skew_r0_admission_requires_failed_identity_and_nonresume() -> None:
+    accepted = {
+        "passed": True,
+        "evidence_kind": "r1_clock_skew_r0_offline_repair",
+        "offline_run_id": "r1-clock-skew-repair-offline-fixture",
+        "failed_campaign_decision": "NOT_READY",
+        "terminal_account_authoritative": False,
+        "resume_authorized": False,
+        "failed_preparation_id": "preflight-package-fixture",
+        "failed_run_id": "preflight-fixture",
+        "failed_session_id": "preflight:fixture:p0:nonce",
+    }
+    assert _admissible_r0_for_r2(accepted) is True
+    assert _predecessor_r0_evidence_id(accepted) == "r1-clock-skew-repair-offline-fixture"
+    assert _admissible_r0_for_r2({**accepted, "resume_authorized": True}) is False
+    assert _admissible_r0_for_r2({**accepted, "failed_session_id": None}) is False
+
+
+def test_special_flatten_r1_admission_requires_nonreusable_failed_identity() -> None:
+    accepted = {
+        "passed": True,
+        "evidence_kind": "r1_special_flatten_admission_r0_offline_repair",
+        "offline_run_id": "r1-special-flatten-admission-repair-offline-fixture",
+        "failed_preflight_decision": "READ_ONLY_PREFLIGHT_FAILED",
+        "failed_identity_reusable": False,
+        "rerun_authorized": False,
+        "resume_authorized": False,
+    }
+    assert _admissible_r0_for_r2(accepted) is True
+    assert _predecessor_r0_evidence_id(accepted) == accepted["offline_run_id"]
+    assert _admissible_r0_for_r2({**accepted, "failed_identity_reusable": True}) is False
 
 
 def test_prepare_freezes_campaign_and_children_without_execution_or_token_leak(

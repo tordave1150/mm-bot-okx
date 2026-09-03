@@ -270,6 +270,8 @@ class BoundedSoakExecutor:
         self.harness = BoundedSoakFaultHarness()
         self.owned: set[str] = set()
         self.owned_quotes: dict[str, tuple[str, Decimal]] = {}
+        self.draining_workoff_quote_observations: dict[str, int] = {}
+        self.draining_workoff_refreshes = 0
         self.pending_intent = ""
         self.normal_creates = 0
         self.normal_create_acknowledgements = 0
@@ -310,7 +312,9 @@ class BoundedSoakExecutor:
                     budget.get("maker_workoff_create_reserve", 12)
                 ),
             )
-            if budget.get("economic_repair_version") == "r0-sample-efficiency-v1":
+            if budget.get("economic_repair_version") in {
+                "r0-sample-efficiency-v1", "r0-terminal-workoff-v2",
+            }:
                 self.sample_efficiency_policy = SampleEfficiencyQuotePolicy(
                     minimum_half_spread_bps=Decimal(
                         str(budget["minimum_half_spread_bps"])
@@ -325,6 +329,15 @@ class BoundedSoakExecutor:
                     defense_retention_threshold_ticks=int(
                         budget["defense_quote_retention_threshold_ticks"]
                     ),
+                    draining_workoff_retention_threshold_ticks=int(
+                        budget.get("draining_workoff_retention_threshold_ticks", 5)
+                    ),
+                    draining_workoff_max_quote_observations=int(
+                        budget.get("draining_workoff_max_quote_observations", 6)
+                    ),
+                    draining_workoff_max_refreshes=int(
+                        budget.get("draining_workoff_max_refreshes", 3)
+                    ),
                     admission_create_cap=int(budget["admission_create_cap"]),
                     workoff_create_reserve=int(
                         budget["maker_workoff_create_reserve"]
@@ -337,7 +350,10 @@ class BoundedSoakExecutor:
         return bool(
             self.economic_mode
             and self.package.spec["risk_budget"].get("economic_repair_version")
-            in {"a2-ack-accounting-v2", "r0-sample-efficiency-v1"}
+            in {
+                "a2-ack-accounting-v2", "r0-sample-efficiency-v1",
+                "r0-terminal-workoff-v2",
+            }
         )
 
     @property
@@ -428,6 +444,7 @@ class BoundedSoakExecutor:
         for client_id in filled:
             self.owned.discard(client_id)
             self.owned_quotes.pop(client_id, None)
+            self.draining_workoff_quote_observations.pop(client_id, None)
         if filled:
             self._commit_controller(
                 "FILLED_ORDER_OWNERSHIP_RELEASED",
@@ -757,14 +774,6 @@ class BoundedSoakExecutor:
                         trade_id=trade_id,
                         timestamp_ms=causal_timestamp_ms,
                     )
-                    if next_inventory == 0:
-                        self.activity.observe_maker_workoff(
-                            trade_id=trade_id,
-                            timestamp_ms=causal_timestamp_ms,
-                            workoff_trade_id=trade_id,
-                            workoff_order_id=str(row["order_id"]),
-                            matched_quantity_btc=quantity,
-                        )
                     if self.last_mid_usdt is not None:
                         price = Decimal(str(row["price"]))
                         markout = quantity * (
@@ -982,6 +991,7 @@ class BoundedSoakExecutor:
                 self.sleep(1)
         self.owned.clear()
         self.owned_quotes.clear()
+        self.draining_workoff_quote_observations.clear()
         self.pending_intent = ""
         self._commit_controller("CANCEL_RECONCILED")
 
@@ -1044,6 +1054,7 @@ class BoundedSoakExecutor:
                         )
                 self.owned.clear()
                 self.owned_quotes.clear()
+                self.draining_workoff_quote_observations.clear()
                 self._commit_controller("FLATTEN_RECONCILED")
                 return engine_bound
         raise SoakExecutionError("single-flight flatten did not reconcile")
@@ -1742,13 +1753,21 @@ class BoundedSoakExecutor:
                         "shutdown reconciliation reserve is invalid"
                     )
                 activity_wall_seconds -= reserve
-            while (
-                self.now() - started < activity_wall_seconds
-                and self.normal_creates < int(budget["session_normal_create_cap"])
-            ):
+            # At the frozen create cap, a draining session may still wait for
+            # an already-acknowledged maker work-off quote.  Exiting here
+            # would cancel that quote and force a special taker flatten even
+            # though no further create is permitted or needed.
+            while self.now() - started < activity_wall_seconds:
+                if (
+                    not self.repaired_economic_mode
+                    and self.normal_creates
+                    >= int(budget["session_normal_create_cap"])
+                ):
+                    break
                 account = self._read("fetch_account", self.gateway.fetch_account)
                 if self._loss_guard(account):
                     break
+                at_create_cap_workoff = False
                 if self.repaired_economic_mode:
                     account = self._reconcile_account_engine_inventory(account)
                     elapsed = self.now() - started
@@ -1823,6 +1842,13 @@ class BoundedSoakExecutor:
                 quotes = self._fee_aware_quote_plan(account=account, book=book)
                 if self.repaired_economic_mode:
                     targets = dict(quotes)
+                    at_create_cap_workoff = bool(
+                        self.activity is not None
+                        and self.activity.phase is SessionPhase.DRAINING
+                        and Decimal(str(account.position_btc)) != 0
+                        and self.normal_creates
+                        >= int(budget["session_normal_create_cap"])
+                    )
                     invalid_existing = [
                         client_id
                         for client_id, (side, price) in self.owned_quotes.items()
@@ -1846,9 +1872,63 @@ class BoundedSoakExecutor:
                             ),
                         )
                     ]
-                    if invalid_existing:
+                    draining_workoff_quote_ids = [
+                        client_id
+                        for client_id, (side, _) in self.owned_quotes.items()
+                        if (
+                            self.activity is not None
+                            and self.activity.phase is SessionPhase.DRAINING
+                            and Decimal(str(account.position_btc)) != 0
+                            and side in targets
+                        )
+                    ]
+                    for client_id in draining_workoff_quote_ids:
+                        self.draining_workoff_quote_observations[client_id] = (
+                            self.draining_workoff_quote_observations.get(client_id, 0) + 1
+                        )
+                    refresh_due = bool(
+                        self.sample_efficiency_policy is not None
+                        and self.normal_creates
+                        < int(budget["session_normal_create_cap"])
+                        and any(
+                            self.sample_efficiency_policy.refresh_draining_workoff(
+                                observations=self.draining_workoff_quote_observations[
+                                    client_id
+                                ],
+                                refreshes=self.draining_workoff_refreshes,
+                                inventory_btc=Decimal(str(account.position_btc)),
+                            )
+                            for client_id in draining_workoff_quote_ids
+                        )
+                    )
+                    if refresh_due:
+                        invalid_existing = list(self.owned_quotes)
+                        self.draining_workoff_refreshes += 1
+                        if self.activity is not None:
+                            self.activity.record_placement_reason(
+                                reason="DRAINING_WORKOFF_REFRESH_DUE",
+                                timestamp_ms=self._activity_time(),
+                            )
+                    retain_workoff_at_cap = bool(
+                        at_create_cap_workoff
+                        and invalid_existing
+                        and self.owned_quotes
+                        and all(
+                            side in targets
+                            for side, _ in self.owned_quotes.values()
+                        )
+                    )
+                    if invalid_existing and not retain_workoff_at_cap:
                         self._cancel_owned()
                         quotes = ()
+                    elif retain_workoff_at_cap and self.activity is not None:
+                        # There is no remaining create budget for a safe
+                        # replacement.  Keep the owned, correctly-sided,
+                        # post-only work-off quote and observe it only.
+                        self.activity.record_placement_reason(
+                            reason="DRAINING_WORKOFF_RETAINED_AT_CAP",
+                            timestamp_ms=self._activity_time(),
+                        )
                     existing_sides = {
                         side for side, _ in self.owned_quotes.values()
                     }
@@ -1871,6 +1951,19 @@ class BoundedSoakExecutor:
                         fee_gate_open=bool(quotes or self.owned_quotes),
                         unresolved_intent=bool(self.pending_intent),
                     )
+                if at_create_cap_workoff and self.owned_quotes:
+                    # Read-only observation is deliberately paced; it gives
+                    # the retained maker order a chance to fill without
+                    # consuming a create or opening new exposure.
+                    self.sleep(int(budget["observation_interval_ms"]) / 1000)
+                    self._ingest_trades()
+                    continue
+                if (
+                    self.normal_creates
+                    >= int(budget["session_normal_create_cap"])
+                    and not self.owned_quotes
+                ):
+                    break
                 for side, price in quotes:
                     if self.normal_creates >= int(budget["session_normal_create_cap"]):
                         break
@@ -1921,6 +2014,7 @@ class BoundedSoakExecutor:
                         )
                         self.owned.discard(client_id)
                         self.owned_quotes.pop(client_id, None)
+                        self.draining_workoff_quote_observations.pop(client_id, None)
                         self.pending_intent = ""
                         if self.activity is not None:
                             self.activity.record_placement_reason(
@@ -1960,6 +2054,7 @@ class BoundedSoakExecutor:
                         self.normal_create_rejections += 1
                         self.owned.discard(client_id)
                         self.owned_quotes.pop(client_id, None)
+                        self.draining_workoff_quote_observations.pop(client_id, None)
                         self.pending_intent = ""
                         if self.activity is not None:
                             self.activity.record_placement_reason(
@@ -2012,6 +2107,7 @@ class BoundedSoakExecutor:
                     ))
                     self.normal_create_acknowledgements += 1
                     self.owned_quotes[client_id] = (side, Decimal(str(price)))
+                    self.draining_workoff_quote_observations[client_id] = 0
                     if self.activity is not None and account.position_btc != 0:
                         self.activity.bind_maker_reentry_order(
                             client_order_id=client_id,

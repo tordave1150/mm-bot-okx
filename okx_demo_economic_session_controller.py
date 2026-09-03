@@ -53,6 +53,8 @@ class SampleEfficiencyQuotePolicy:
     balanced_retention_threshold_ticks: int = 10
     defense_retention_threshold_ticks: int = 20
     draining_workoff_retention_threshold_ticks: int = 5
+    draining_workoff_max_quote_observations: int = 6
+    draining_workoff_max_refreshes: int = 3
     admission_create_cap: int = 48
     workoff_create_reserve: int = 12
 
@@ -82,6 +84,10 @@ class SampleEfficiencyQuotePolicy:
             <= self.balanced_retention_threshold_ticks
         ):
             raise CampaignError("draining work-off retention is outside bounded repair")
+        if not 2 <= self.draining_workoff_max_quote_observations <= 10:
+            raise CampaignError("draining work-off observation bound is invalid")
+        if not 1 <= self.draining_workoff_max_refreshes <= 3:
+            raise CampaignError("draining work-off refresh bound is invalid")
         if self.admission_create_cap != 48 or self.workoff_create_reserve != 12:
             raise CampaignError("sample-efficiency create partition drift")
         if self.admission_create_cap + self.workoff_create_reserve != 60:
@@ -102,6 +108,26 @@ class SampleEfficiencyQuotePolicy:
             else self.defense_retention_threshold_ticks
         )
 
+    def refresh_draining_workoff(
+        self, *, observations: int, refreshes: int, inventory_btc: Decimal,
+    ) -> bool:
+        """Return whether one reserved maker work-off refresh is due.
+
+        A price can remain tick-valid while becoming non-productive at the end
+        of a session. This bounded rule refreshes only an already-owned,
+        correctly-sided work-off quote; it never authorizes new exposure.
+        """
+        self.validate()
+        inventory = _decimal(inventory_btc, "inventory_btc")
+        if inventory == 0:
+            return False
+        if observations < 0 or refreshes < 0:
+            raise CampaignError("draining work-off counters regressed")
+        return bool(
+            observations >= self.draining_workoff_max_quote_observations
+            and refreshes < self.draining_workoff_max_refreshes
+        )
+
     def to_dict(self) -> dict[str, object]:
         self.validate()
         return {
@@ -119,6 +145,10 @@ class SampleEfficiencyQuotePolicy:
             "draining_workoff_retention_threshold_ticks": (
                 self.draining_workoff_retention_threshold_ticks
             ),
+            "draining_workoff_max_quote_observations": (
+                self.draining_workoff_max_quote_observations
+            ),
+            "draining_workoff_max_refreshes": self.draining_workoff_max_refreshes,
             "admission_create_cap": self.admission_create_cap,
             "workoff_create_reserve": self.workoff_create_reserve,
             "total_create_cap": (
@@ -416,6 +446,8 @@ class EconomicSessionController:
         if reason not in {
             "FEE_EDGE_BLOCKED",
             "QUOTE_STILL_VALID",
+            "DRAINING_WORKOFF_RETAINED_AT_CAP",
+            "DRAINING_WORKOFF_REFRESH_DUE",
             "FILL_IMBALANCE_BLOCKED",
             "DRAINING_NEW_EXPOSURE_BLOCKED",
             "POST_ONLY_REJECTED",
@@ -544,6 +576,33 @@ class EconomicSessionController:
             raise CampaignError("normal fill binding is outside budget")
         if price < 0:
             raise CampaignError("normal fill price is invalid")
+        signed_quantity = quantity if side == "buy" else -quantity
+        if after != before + signed_quantity:
+            raise CampaignError("normal fill inventory transition does not reconcile")
+        opposite_inventory = (
+            (before > 0 and side == "sell")
+            or (before < 0 and side == "buy")
+        )
+        workoff_quantity = (
+            min(quantity, abs(before)) if opposite_inventory else Decimal("0")
+        )
+        opening_quantity = quantity - workoff_quantity
+        if workoff_quantity > 0:
+            available_workoff = sum(
+                (
+                    prior.remaining_workoff_btc
+                    for prior in (*self.pending_fills.values(), *self.completed_fills.values())
+                    if prior.fill_side != side and prior.remaining_workoff_btc > 0
+                ),
+                Decimal("0"),
+            )
+            if available_workoff < workoff_quantity:
+                raise CampaignError("maker work-off causal inventory underflow")
+        record_timestamp = max(
+            timestamp_ms,
+            self.last_timestamp_ms,
+            timestamp_ms if observed_at_ms is None else int(observed_at_ms),
+        )
         item = PendingCausalFill(
             trade_id=trade_id,
             fill_side=side,
@@ -553,14 +612,16 @@ class EconomicSessionController:
             fill_order_id=fill_order_id,
             fill_quantity_btc=quantity,
             fill_price_usdt=price,
-            remaining_workoff_btc=quantity,
+            # Only the part of this maker fill that opens inventory needs a
+            # later causal work-off.  The opposing part already works off the
+            # prior signed inventory and must not be counted a second time as
+            # a fresh causal remainder.
+            remaining_workoff_btc=opening_quantity,
+            matched_workoff_btc=workoff_quantity,
+            workoff_trade_ids=([trade_id] if workoff_quantity > 0 else []),
+            workoff_order_ids=([fill_order_id] if workoff_quantity > 0 else []),
         )
         self.pending_fills[trade_id] = item
-        record_timestamp = max(
-            timestamp_ms,
-            self.last_timestamp_ms,
-            timestamp_ms if observed_at_ms is None else int(observed_at_ms),
-        )
         self._record(
             "NORMAL_MAKER_FILL_OBSERVED",
             record_timestamp,
@@ -577,10 +638,12 @@ class EconomicSessionController:
             self.normal_bid_fill_quantity_btc += quantity
         else:
             self.normal_ask_fill_quantity_btc += quantity
-        # An opposite maker fill that reduces absolute inventory is durable
-        # proof of quantity-matched work-off for the oldest eligible causal lots.
-        if abs(after) < abs(before):
-            workoff_remaining = min(quantity, abs(before) - abs(after))
+        # The opposing portion of a maker fill is durable quantity-matched
+        # work-off for the oldest eligible causal lots.  This remains true
+        # when the fill crosses through zero; only the residual crossing
+        # quantity opens a new causal lot.
+        if workoff_quantity > 0:
+            workoff_remaining = workoff_quantity
             candidates = sorted(
                 (*self.pending_fills.values(), *self.completed_fills.values()),
                 key=lambda row: (row.fill_timestamp_ms, row.trade_id),
@@ -603,6 +666,16 @@ class EconomicSessionController:
                 workoff_remaining -= matched
                 if workoff_remaining == 0:
                     break
+            if workoff_remaining != 0:
+                raise CampaignError("maker work-off causal inventory underflow")
+            self._record(
+                "MAKER_FILL_NETTING_OBSERVED",
+                record_timestamp,
+                trade_id=trade_id,
+                workoff_quantity_btc=str(workoff_quantity),
+                opening_quantity_btc=str(opening_quantity),
+            )
+        self._complete_if_ready(item)
 
     def observe_inventory_defense(self, *, trade_id: str, timestamp_ms: int) -> None:
         item = self._pending(trade_id)
@@ -612,6 +685,22 @@ class EconomicSessionController:
             raise CampaignError("inventory defense precedes fill")
         item.defense_timestamp_ms = timestamp_ms
         self._record("INVENTORY_DEFENSE_OBSERVED", timestamp_ms, trade_id=trade_id)
+        if item.remaining_workoff_btc == 0 and not item.maker_workoff_observed:
+            # A fill used entirely to reduce prior inventory has no new causal
+            # remainder.  Its completion becomes admissible only after the
+            # inventory-defense event is durable, preserving event causality.
+            item.maker_workoff_observed = True
+            item.workoff_timestamp_ms = timestamp_ms
+            self._record(
+                "MAKER_WORKOFF_OBSERVED",
+                timestamp_ms,
+                trade_id=trade_id,
+                workoff_trade_id=trade_id,
+                workoff_order_id=item.fill_order_id,
+                matched_quantity_btc=str(item.matched_workoff_btc),
+                remaining_workoff_btc="0",
+            )
+            self._complete_if_ready(item)
 
     def observe_maker_reentry(
         self,

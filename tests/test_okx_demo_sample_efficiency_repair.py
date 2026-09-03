@@ -35,6 +35,19 @@ def test_successor_policy_is_fee_positive_and_keeps_risk_partition_frozen() -> N
     assert policy.retention_threshold_ticks(Decimal("0")) == 10
     assert policy.retention_threshold_ticks(Decimal("0.01")) == 20
     assert policy.retention_threshold_ticks(Decimal("-0.01")) == 20
+    assert policy.retention_threshold_ticks(Decimal("0.01"), draining=True) == 5
+    assert policy.refresh_draining_workoff(
+        observations=5, refreshes=0, inventory_btc=Decimal("0.01")
+    ) is False
+    assert policy.refresh_draining_workoff(
+        observations=6, refreshes=0, inventory_btc=Decimal("0.01")
+    ) is True
+    assert policy.refresh_draining_workoff(
+        observations=6, refreshes=3, inventory_btc=Decimal("0.01")
+    ) is False
+    assert policy.refresh_draining_workoff(
+        observations=99, refreshes=0, inventory_btc=Decimal("0")
+    ) is False
     assert policy.to_dict()["total_create_cap"] == 60
     assert policy.to_dict()["risk_expansion"] is False
     decision = fee_aware_quote_pair(
@@ -128,6 +141,10 @@ def test_causal_maker_workoff_completes_without_taker_flatten() -> None:
         (
             SampleEfficiencyQuotePolicy(admission_create_cap=49),
             "partition drift",
+        ),
+        (
+            SampleEfficiencyQuotePolicy(draining_workoff_max_refreshes=4),
+            "refresh bound",
         ),
     ],
 )

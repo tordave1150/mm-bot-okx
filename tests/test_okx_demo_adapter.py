@@ -10,6 +10,7 @@ import okx_demo_adapter
 from market_spec import MarketSpec
 from okx_demo_adapter import (
     AmbiguousExchangeState,
+    ClockSkewBudgetError,
     DemoAdapterConfig,
     DemoAdapterError,
     ExecutionMode,
@@ -599,8 +600,10 @@ def test_clock_skew_preflight_proves_zero_new_submissions(tmp_path: Path) -> Non
     exchange = FaultExchange()
     exchange.clock_offset_ms = 10_000
     adapter = _unstarted_adapter(tmp_path, exchange)
-    with pytest.raises(DemoAdapterError, match="clock skew"):
+    with pytest.raises(ClockSkewBudgetError, match="clock skew") as failure:
         adapter.preflight()
+    assert failure.value.clock_skew_ms > 1_500
+    assert failure.value.maximum_clock_skew_ms == 1_500
     assert exchange.create_calls == 0
     assert adapter.allow_new_orders is False
 

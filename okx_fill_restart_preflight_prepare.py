@@ -133,6 +133,19 @@ def prepare_preflight_package(root: Path, repair_id: str) -> tuple[Path, dict[st
             "execution_environment_transport_r0_offline_repair",
             "r2_session5_terminal_reconciliation_r0_offline_repair",
             "r2_session1_cancel_fill_reconciliation_r0_offline_repair",
+            "r2_session1_fill_claim_reconciliation_r0_offline_repair",
+            "r2_session1_special_closure_reconciliation_r0_offline_repair",
+            "r2_session5_special_quantity_reconciliation_r0_offline_repair",
+            "r2_session1_interruption_audit_r0_offline",
+            "r1_clock_skew_r0_offline_repair",
+            "r2_terminal_workoff_r0_offline_repair",
+            "r2_terminal_workoff_v2_r0_offline_repair",
+            "r2_session5_clock_skew_interruption_audit_r0_offline",
+            "r1_network_transport_audit_r0_offline",
+            "r1_preflight_bootstrap_exposure_admission_r0_offline_repair",
+            "r2_bootstrap_exposure_admission_r0_offline_repair",
+            "r2_special_flatten_classification_r0_offline_repair",
+            "r1_special_flatten_admission_r0_offline_repair",
         }:
             raise PreflightPreparationError(
                 "supported successor repair evidence is required"

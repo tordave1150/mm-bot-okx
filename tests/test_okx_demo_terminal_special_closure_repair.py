@@ -80,6 +80,85 @@ def test_special_flatten_three_ledger_quantity_mismatch_fails_closed() -> None:
         )
 
 
+def test_alternating_cross_zero_fills_net_to_special_closure_inventory() -> None:
+    """Reproduce R2 Session 1's five alternating normal maker fills."""
+    controller = EconomicSessionController(
+        session_id="economic:session1-special-closure:p0:fixture",
+        source_sha256="a" * 64,
+    )
+    inventory = Decimal("0")
+    rows = (
+        ("fill-1", "sell", Decimal("0.0055")),
+        ("fill-2", "buy", Decimal("0.010")),
+        ("fill-3", "sell", Decimal("0.010")),
+        ("fill-4", "buy", Decimal("0.010")),
+        ("fill-5", "sell", Decimal("0.010")),
+    )
+    for index, (trade_id, side, quantity) in enumerate(rows, start=1):
+        after = inventory + (quantity if side == "buy" else -quantity)
+        timestamp = index * 10
+        controller.observe_fill(
+            trade_id=trade_id,
+            side=side,
+            timestamp_ms=timestamp,
+            inventory_before_btc=inventory,
+            inventory_after_btc=after,
+            fill_order_id=f"order-{index}",
+            fill_quantity_btc=quantity,
+            fill_price_usdt=Decimal("78000"),
+        )
+        controller.observe_inventory_defense(
+            trade_id=trade_id,
+            timestamp_ms=timestamp + 1,
+        )
+        controller.observe_markout(
+            trade_id=trade_id,
+            timestamp_ms=timestamp + 2,
+            markout_usdt=Decimal("0.01"),
+        )
+        inventory = after
+
+    assert inventory == Decimal("-0.0055")
+    candidates = [
+        item for item in (*controller.pending_fills.values(), *controller.completed_fills.values())
+        if item.remaining_workoff_btc > 0
+    ]
+    causal_inventory = sum(
+        (item.remaining_workoff_btc if item.fill_side == "buy" else -item.remaining_workoff_btc for item in candidates),
+        Decimal("0"),
+    )
+    assert causal_inventory == inventory
+    assert controller.close_with_special_flatten(
+        timestamp_ms=100,
+        inventory_before_btc=inventory,
+        flatten_quantity_btc=abs(inventory),
+    ) == ("fill-5",)
+    controller.finish(timestamp_ms=101)
+    evidence = controller.evidence(require_complete=True)
+    assert evidence["pending_causal_fills"] == []
+    assert [row["trade_id"] for row in evidence["special_closed_causal_fills"]] == [
+        "fill-5"
+    ]
+
+
+def test_fill_inventory_transition_conflict_fails_closed() -> None:
+    controller = EconomicSessionController(
+        session_id="economic:session1-transition-conflict:p0:fixture",
+        source_sha256="a" * 64,
+    )
+    with pytest.raises(CampaignError, match="transition does not reconcile"):
+        controller.observe_fill(
+            trade_id="conflict",
+            side="buy",
+            timestamp_ms=1,
+            inventory_before_btc=Decimal("0"),
+            inventory_after_btc=Decimal("0.005"),
+            fill_order_id="conflict-order",
+            fill_quantity_btc=Decimal("0.01"),
+            fill_price_usdt=Decimal("78000"),
+        )
+
+
 def test_timeboxed_draining_preserves_budget_and_refreshes_workoff_quotes() -> None:
     controller = EconomicSessionController(
         session_id="economic:timebox:p0:fixture", source_sha256="b" * 64

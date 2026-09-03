@@ -11,6 +11,7 @@ from okx_demo_adapter import DemoAdapterError
 from okx_fill_restart_preflight import (
     ReadOnlyExchangeProxy,
     ReadOnlyPreflightError,
+    _clock_skew_diagnostic,
     _preflight_predecessor_audit,
     _pre_market_terminal_account_pair,
     _sanitized_account_only_diagnostic,
@@ -88,6 +89,18 @@ def test_session_scoped_arm_token_is_exact() -> None:
         expected_arm_token("formal:fixture")
 
 
+def test_clock_skew_diagnostic_serializes_only_measurement_and_frozen_bound() -> None:
+    error = type("ClockError", (Exception,), {
+        "clock_skew_ms": 1_501,
+        "maximum_clock_skew_ms": 1_500,
+    })()
+    assert _clock_skew_diagnostic(error) == {
+        "clock_skew_ms": 1_501,
+        "maximum_clock_skew_ms": 1_500,
+    }
+    assert _clock_skew_diagnostic(ValueError("no clock data")) is None
+
+
 def test_execution_environment_transport_evidence_uses_multi_session_protocol() -> None:
     assert (
         preflight.preflight_protocol_id_for_evidence(
@@ -119,6 +132,69 @@ def test_r2_session5_terminal_repair_uses_multi_session_protocol() -> None:
     assert audit["passed"] is True
     assert audit["resume_authorized"] is False
     assert audit["session_package_id"] == "soak-package-failed-s05"
+
+
+def test_r2_session1_special_closure_repair_uses_multi_session_protocol() -> None:
+    evidence_kind = (
+        "r2_session1_special_closure_reconciliation_r0_offline_repair"
+    )
+    assert (
+        preflight.preflight_protocol_id_for_evidence(evidence_kind)
+        == preflight.MULTI_SESSION_A1_PREFLIGHT_PROTOCOL_ID
+    )
+    audit = _preflight_predecessor_audit(
+        ROOT,
+        {
+            "evidence_kind": evidence_kind,
+            "failed_campaign_decision": "FAILED_TERMINALLY_SAFE",
+            "active_failed_slot": 1,
+            "terminal_account_authoritative": True,
+            "resume_authorized": False,
+            "failed_package_id": "economic-package-failed",
+            "failed_campaign_run_id": "economic-campaign-run-failed",
+            "failed_session_package_id": "soak-package-failed-s01",
+        },
+    )
+    assert audit["passed"] is True
+    assert audit["resume_authorized"] is False
+    assert audit["session_package_id"] == "soak-package-failed-s01"
+
+
+def test_special_flatten_classification_r0_admission_is_exact_and_fail_closed() -> None:
+    evidence_kind = "r2_special_flatten_classification_r0_offline_repair"
+    assert preflight.preflight_protocol_id_for_evidence(evidence_kind) == (
+        preflight.MULTI_SESSION_A1_PREFLIGHT_PROTOCOL_ID
+    )
+    accepted = _preflight_predecessor_audit(ROOT, {
+        "evidence_kind": evidence_kind,
+        "failed_campaign_decision": "NOT_READY",
+        "terminal_account_authoritative": False,
+        "special_flatten_sessions": 2,
+        "resume_authorized": False,
+        "identity_reuse_authorized": False,
+    })
+    assert accepted["passed"] is True
+    rejected = _preflight_predecessor_audit(ROOT, {
+        "evidence_kind": evidence_kind,
+        "failed_campaign_decision": "NOT_READY",
+        "terminal_account_authoritative": False,
+        "special_flatten_sessions": 3,
+        "resume_authorized": False,
+        "identity_reuse_authorized": False,
+    })
+    assert rejected["passed"] is False
+
+
+def test_special_flatten_admission_repair_evidence_remains_non_reusable() -> None:
+    audit = _preflight_predecessor_audit(ROOT, {
+        "evidence_kind": "r1_special_flatten_admission_r0_offline_repair",
+        "failed_preflight_decision": "READ_ONLY_PREFLIGHT_FAILED",
+        "failed_identity_reusable": False,
+        "rerun_authorized": False,
+        "resume_authorized": False,
+    })
+    assert audit["passed"] is True
+    assert audit["resume_authorized"] is False
 
 
 def test_unknown_evidence_uses_legacy_preflight_protocol() -> None:

@@ -119,15 +119,31 @@ def _validate_special_closed_fill(value: object) -> str:
     reentry_quantity = _decimal(
         binding["reentry_quantity_btc"], "causal reentry quantity"
     )
+    workoff_trade_ids = binding["workoff_trade_ids"]
+    workoff_order_ids = binding["workoff_order_ids"]
+    workoff_ids_valid = all(
+        isinstance(values, list)
+        and all(isinstance(item, str) and item for item in values)
+        and len(values) == len(set(values))
+        for values in (workoff_trade_ids, workoff_order_ids)
+    )
+    partial_workoff_binding_valid = (
+        (matched == 0 and workoff_trade_ids == [] and workoff_order_ids == [])
+        or (
+            matched > 0
+            and bool(workoff_trade_ids)
+            and bool(workoff_order_ids)
+        )
+    )
     if any((
         not binding["fill_order_id"],
         fill_quantity <= 0,
         fill_quantity > Decimal("0.01"),
         remaining <= 0,
-        matched != 0,
-        remaining != fill_quantity,
-        binding["workoff_trade_ids"] != [],
-        binding["workoff_order_ids"] != [],
+        matched < 0,
+        remaining + matched != fill_quantity,
+        not workoff_ids_valid,
+        not partial_workoff_binding_valid,
         maker_reentry and not binding["reentry_client_order_id"],
         maker_reentry
         and binding["reentry_side"]
@@ -464,6 +480,16 @@ class SessionEvidence:
         return self.normal_bid_fills + self.normal_ask_fills
 
     @property
+    def has_special_flatten_dispatch(self) -> bool:
+        """Return the campaign-rate unit: one session with a flatten dispatch.
+
+        ``special_fill_count`` is a trade-level accounting value.  A single
+        reduce-only flatten may produce multiple fills, so it must never be
+        summed or otherwise used as the campaign's session-level flatten rate.
+        """
+        return self.flatten_dispatches > 0
+
+    @property
     def terminal_special_closed_fill_count(self) -> int:
         rows = self.extension_fields.get("special_closed_causal_fills", [])
         return len(rows) if isinstance(rows, Sequence) else 0
@@ -787,7 +813,7 @@ class SessionEvidence:
                 raise CampaignError("placement reason counter regression")
             if "sample_efficiency_policy" in control:
                 policy = control["sample_efficiency_policy"]
-                expected_policy = {
+                legacy_policy = {
                     "minimum_half_spread_bps": "4.0",
                     "maker_fee_rate": "0.0002",
                     "fee_edge_safety_buffer_usdt": "0.01",
@@ -799,7 +825,14 @@ class SessionEvidence:
                     "total_create_cap": 60,
                     "risk_expansion": False,
                 }
-                if not isinstance(policy, Mapping) or dict(policy) != expected_policy:
+                v2_policy = {
+                    **legacy_policy,
+                    "draining_workoff_max_quote_observations": 6,
+                    "draining_workoff_max_refreshes": 3,
+                }
+                if not isinstance(policy, Mapping) or (
+                    dict(policy) != legacy_policy and dict(policy) != v2_policy
+                ):
                     raise CampaignError("sample-efficiency policy audit drift")
             bid_quantity = _decimal(
                 control["normal_bid_fill_quantity_btc"], "normal bid fill quantity"
@@ -1360,9 +1393,11 @@ class CampaignRegistry:
             "aggregate_net_pnl_usdt": str(sum(
                 (item.aggregate_net_pnl_usdt for item in rows), Decimal("0")
             )),
-            "special_flatten_sessions": sum(item.flatten_dispatches > 0 for item in rows),
+            "special_flatten_sessions": sum(
+                item.has_special_flatten_dispatch for item in rows
+            ),
             "special_flatten_fraction": str(
-                Decimal(sum(item.flatten_dispatches > 0 for item in rows))
+                Decimal(sum(item.has_special_flatten_dispatch for item in rows))
                 / Decimal(max(len(rows), 1))
             ),
             "maximum_session_drawdown_usdt": str(max(

@@ -157,6 +157,45 @@ def test_multi_partial_terminal_closure_reconciles_each_fifo_fill_identity() -> 
     assert session.terminal_special_closed_markout_count == 2
 
 
+def test_partially_worked_off_fill_can_special_close_only_its_residual() -> None:
+    payload = deepcopy(_payload())
+    binding = payload["special_closed_causal_fills"][0]["causal_binding"]  # type: ignore[index]
+    binding["fill_quantity_btc"] = "0.010"
+    binding["remaining_workoff_btc"] = "0.0005"
+    binding["matched_workoff_btc"] = "0.0095"
+    binding["workoff_trade_ids"] = ["maker-workoff-partial"]
+    binding["workoff_order_ids"] = ["order-workoff-partial"]
+    session = _session(payload)
+    closed = session.extension_fields["special_closed_causal_fills"][0]
+    assert closed["causal_binding"]["remaining_workoff_btc"] == "0.0005"
+    assert closed["causal_binding"]["matched_workoff_btc"] == "0.0095"
+
+
+@pytest.mark.parametrize(
+    ("remaining", "matched", "trade_ids", "order_ids"),
+    (
+        ("0.0005", "0.0094", ["trade-partial"], ["order-partial"]),
+        ("0.0005", "0.0095", [], ["order-partial"]),
+        ("0.0005", "0.0095", ["trade-partial"], []),
+        ("0.010", "0", ["forged-trade"], ["forged-order"]),
+    ),
+)
+def test_invalid_partial_special_closure_quantities_fail_closed(
+    remaining: str,
+    matched: str,
+    trade_ids: list[str],
+    order_ids: list[str],
+) -> None:
+    payload = deepcopy(_payload())
+    binding = payload["special_closed_causal_fills"][0]["causal_binding"]  # type: ignore[index]
+    binding["remaining_workoff_btc"] = remaining
+    binding["matched_workoff_btc"] = matched
+    binding["workoff_trade_ids"] = trade_ids
+    binding["workoff_order_ids"] = order_ids
+    with pytest.raises(CampaignError, match="quantities do not reconcile"):
+        _session(payload)
+
+
 def test_terminal_special_closure_survives_sealed_round_trip() -> None:
     original = _session()
     restored = SessionEvidence.from_dict(original.to_dict())

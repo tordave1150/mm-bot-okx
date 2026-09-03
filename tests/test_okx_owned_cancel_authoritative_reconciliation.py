@@ -48,6 +48,8 @@ class CancelRaceExchange:
         self.cancel_result: dict | Exception = {"id": ORDER_ID}
         self.history: list[dict] = []
         self.recent: list[dict] = []
+        self.targeted: list[dict] = []
+        self.targeted_snapshots: list[list[dict]] = []
         self.cancel_calls = 0
         self.trade_calls: list[tuple] = []
 
@@ -68,6 +70,12 @@ class CancelRaceExchange:
 
     def fetch_my_trades(self, symbol, since, limit, params):
         self.trade_calls.append((symbol, since, limit, dict(params)))
+        if params.get("ordId"):
+            rows = (
+                self.targeted_snapshots.pop(0)
+                if self.targeted_snapshots else self.targeted
+            )
+            return deepcopy(rows)
         return deepcopy(self.history if params.get("paginate") else self.recent)
 
 
@@ -166,6 +174,79 @@ def test_terminal_fill_claim_without_owned_trade_stays_fail_closed(monkeypatch) 
     assert audit["classifications"][CLIENT_ID] == "FILL_CLAIM_UNPROVEN"
     assert audit["resolved"] is False
     assert audit["mutation_retries"] == 0
+
+
+def test_delayed_terminal_fill_uses_targeted_order_read_within_frozen_skew(monkeypatch) -> None:
+    exchange = CancelRaceExchange()
+    exchange.open_snapshots = [[]]
+    exchange.order_result = _order(status="closed", filled="1")
+    # The broad recent tail is saturated by old unrelated data.  The exact
+    # order read becomes visible on the second bounded reconciliation round.
+    old_tail = _trade("old-tail")
+    old_tail["timestamp"] = 1
+    exchange.recent = [deepcopy(old_tail) for _ in range(100)]
+    delayed = _trade("delayed-target")
+    delayed["timestamp"] = 999  # within the 1500 ms frozen skew tolerance
+    exchange.targeted_snapshots = [[], [delayed]]
+    gateway = _gateway(monkeypatch, exchange)
+
+    assert gateway.cancel_all_owned([CLIENT_ID]) == (CLIENT_ID,)
+    audit = gateway.last_cancel_reconciliation_audit
+    assert audit["classifications"][CLIENT_ID] == "FILLED_DURING_CANCEL"
+    assert audit["read_attempts"] == 2
+    assert audit["mutation_retries"] == 0
+    assert audit["targeted_order_fill_audit"][CLIENT_ID]["matched_rows"] == 1
+    assert gateway.targeted_order_fill_queries == 2
+
+
+def test_targeted_order_fill_requires_exact_client_identity(monkeypatch) -> None:
+    exchange = CancelRaceExchange()
+    exchange.open_snapshots = [[]]
+    exchange.order_result = _order(status="closed", filled="1")
+    forged = _trade("forged-target")
+    forged["info"] = {"clOrdId": "fr" + "b" * 28}
+    exchange.targeted = [forged]
+    gateway = _gateway(monkeypatch, exchange)
+
+    with pytest.raises(FormalGatewayError, match="bounded reads"):
+        gateway.cancel_all_owned([CLIENT_ID])
+    audit = gateway.last_cancel_reconciliation_audit
+    assert audit["classifications"][CLIENT_ID] == "FILL_CLAIM_UNPROVEN"
+    assert audit["mutation_retries"] == 0
+
+
+def test_targeted_order_fill_requires_exact_order_identity(monkeypatch) -> None:
+    exchange = CancelRaceExchange()
+    exchange.open_snapshots = [[]]
+    exchange.order_result = _order(status="closed", filled="1")
+    forged = _trade("forged-order")
+    forged["order"] = "different-owned-order"
+    exchange.targeted = [forged]
+    gateway = _gateway(monkeypatch, exchange)
+
+    with pytest.raises(FormalGatewayError, match="bounded reads"):
+        gateway.cancel_all_owned([CLIENT_ID])
+    assert gateway.last_cancel_reconciliation_audit["classifications"][CLIENT_ID] == (
+        "FILL_CLAIM_UNPROVEN"
+    )
+
+
+def test_targeted_order_fill_outside_frozen_clock_skew_stays_fail_closed(monkeypatch) -> None:
+    exchange = CancelRaceExchange()
+    exchange.open_snapshots = [[]]
+    exchange.order_result = _order(status="closed", filled="1")
+    stale = _trade("stale-target")
+    stale["timestamp"] = 1_499
+    exchange.targeted = [stale]
+    gateway = FormalDemoGateway(exchange)
+    monkeypatch.setattr(gateway_module.time, "sleep", lambda _: None)
+    gateway.set_cancel_reconciliation_context(since_ms=3_000, read_attempts=3)
+
+    with pytest.raises(FormalGatewayError, match="bounded reads"):
+        gateway.cancel_all_owned([CLIENT_ID])
+    audit = gateway.last_cancel_reconciliation_audit
+    assert audit["classifications"][CLIENT_ID] == "FILL_CLAIM_UNPROVEN"
+    assert audit["targeted_order_fill_audit"][CLIENT_ID]["matched_rows"] == 0
 
 
 def test_unresolved_open_order_fails_closed_after_one_cancel(monkeypatch) -> None:

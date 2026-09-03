@@ -33,6 +33,15 @@ class DemoAdapterError(RuntimeError):
     """Known fail-closed adapter error."""
 
 
+class ClockSkewBudgetError(DemoAdapterError):
+    """Sanitized proof that the frozen clock-health bound was exceeded."""
+
+    def __init__(self, *, clock_skew_ms: int, maximum_clock_skew_ms: int) -> None:
+        self.clock_skew_ms = clock_skew_ms
+        self.maximum_clock_skew_ms = maximum_clock_skew_ms
+        super().__init__("clock skew exceeds frozen limit")
+
+
 class AmbiguousExchangeState(DemoAdapterError):
     """Exchange outcome could not be proven and all new orders must halt."""
 
@@ -211,10 +220,20 @@ class OkxDemoAdapter:
             if self.market_spec.contract_size != Decimal("0.01"):
                 raise DemoAdapterError("contract size does not match one frozen lot")
 
+            observed_before_ms = int(time.time() * 1000)
             server_ms = int(self.exchange.fetch_time())
-            clock_skew = abs(int(time.time() * 1000) - server_ms)
+            observed_after_ms = int(time.time() * 1000)
+            # The gate retains the full observation interval: transport latency
+            # cannot make an out-of-budget clock look healthy.
+            clock_skew = max(
+                abs(observed_before_ms - server_ms),
+                abs(observed_after_ms - server_ms),
+            )
             if clock_skew > self.config.maximum_clock_skew_ms:
-                raise DemoAdapterError("clock skew exceeds frozen limit")
+                raise ClockSkewBudgetError(
+                    clock_skew_ms=clock_skew,
+                    maximum_clock_skew_ms=self.config.maximum_clock_skew_ms,
+                )
 
             balance = self.exchange.fetch_balance()
             usdt = balance.get("USDT", {})

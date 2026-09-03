@@ -52,6 +52,19 @@ MULTI_SESSION_A1_R0_EVIDENCE_KINDS = frozenset(
         "execution_environment_transport_r0_offline_repair",
         "r2_session5_terminal_reconciliation_r0_offline_repair",
         "r2_session1_cancel_fill_reconciliation_r0_offline_repair",
+        "r2_session1_fill_claim_reconciliation_r0_offline_repair",
+        "r2_session1_special_closure_reconciliation_r0_offline_repair",
+        "r2_session5_special_quantity_reconciliation_r0_offline_repair",
+        "r2_session1_interruption_audit_r0_offline",
+        "r1_clock_skew_r0_offline_repair",
+        "r2_terminal_workoff_r0_offline_repair",
+        "r2_terminal_workoff_v2_r0_offline_repair",
+        "r2_session5_clock_skew_interruption_audit_r0_offline",
+        "r1_network_transport_audit_r0_offline",
+        "r1_preflight_bootstrap_exposure_admission_r0_offline_repair",
+        "r2_bootstrap_exposure_admission_r0_offline_repair",
+        "r2_special_flatten_classification_r0_offline_repair",
+        "r1_special_flatten_admission_r0_offline_repair",
     }
 )
 
@@ -194,6 +207,56 @@ R2_SESSION1_CANCEL_FILL_RECONCILIATION_READY_STATUS = (
 R2_SESSION1_CANCEL_FILL_RECONCILIATION_ARTIFACT_ROOT = (
     Path("artifacts") / "okx_demo_r2_session1_cancel_fill_reconciliation_repair"
 )
+R2_SESSION1_FILL_CLAIM_RECONCILIATION_READY_STATUS = (
+    "OKX_DEMO_R2_SESSION1_FILL_CLAIM_RECONCILIATION_R0_OFFLINE_SUPPORT"
+)
+R2_SESSION1_FILL_CLAIM_RECONCILIATION_ARTIFACT_ROOT = (
+    Path("artifacts") / "okx_demo_r2_session1_fill_claim_reconciliation_repair"
+)
+R2_SESSION1_SPECIAL_CLOSURE_RECONCILIATION_READY_STATUS = (
+    "OKX_DEMO_R2_SESSION1_SPECIAL_CLOSURE_R0_OFFLINE_SUPPORT"
+)
+R2_SESSION1_SPECIAL_CLOSURE_RECONCILIATION_ARTIFACT_ROOT = (
+    Path("artifacts") / "okx_demo_r2_session1_special_closure_repair"
+)
+R2_SESSION5_SPECIAL_QUANTITY_RECONCILIATION_READY_STATUS = (
+    "OKX_DEMO_R2_SESSION5_SPECIAL_QUANTITY_R0_OFFLINE_SUPPORT"
+)
+R2_SESSION5_SPECIAL_QUANTITY_RECONCILIATION_ARTIFACT_ROOT = (
+    Path("artifacts") / "okx_demo_r2_session5_special_quantity_repair"
+)
+R2_SESSION1_INTERRUPTION_AUDIT_READY_STATUS = (
+    "OKX_DEMO_R2_SESSION1_INTERRUPTION_AUDIT_R0_OFFLINE_SUPPORT"
+)
+R2_SESSION1_INTERRUPTION_AUDIT_ARTIFACT_ROOT = (
+    Path("artifacts") / "okx_demo_r2_session1_interruption_audit"
+)
+R1_CLOCK_SKEW_REPAIR_READY_STATUS = "OKX_DEMO_R1_CLOCK_SKEW_REPAIR_R0_OFFLINE_SUPPORT"
+R1_CLOCK_SKEW_REPAIR_ARTIFACT_ROOT = Path("artifacts") / "okx_demo_r1_clock_skew_repair"
+R1_BOOTSTRAP_EXPOSURE_ADMISSION_READY_STATUS = (
+    "OKX_DEMO_R1_BOOTSTRAP_EXPOSURE_ADMISSION_REPAIR_R0_OFFLINE_SUPPORT"
+)
+R1_BOOTSTRAP_EXPOSURE_ADMISSION_ARTIFACT_ROOT = (
+    Path("artifacts") / "okx_demo_r1_preflight_bootstrap_exposure_admission_repair"
+)
+R2_BOOTSTRAP_EXPOSURE_ADMISSION_READY_STATUS = (
+    "OKX_DEMO_R2_BOOTSTRAP_EXPOSURE_ADMISSION_REPAIR_R0_OFFLINE_SUPPORT"
+)
+R2_BOOTSTRAP_EXPOSURE_ADMISSION_ARTIFACT_ROOT = (
+    Path("artifacts") / "okx_demo_r2_bootstrap_exposure_admission_repair"
+)
+R2_SPECIAL_FLATTEN_CLASSIFICATION_REPAIR_READY_STATUS = (
+    "OKX_DEMO_R2_SPECIAL_FLATTEN_CLASSIFICATION_REPAIR_R0_OFFLINE_SUPPORT"
+)
+R2_SPECIAL_FLATTEN_CLASSIFICATION_REPAIR_ARTIFACT_ROOT = (
+    Path("artifacts") / "okx_demo_r2_special_flatten_classification_repair"
+)
+R1_SPECIAL_FLATTEN_ADMISSION_REPAIR_READY_STATUS = (
+    "OKX_DEMO_R1_SPECIAL_FLATTEN_ADMISSION_REPAIR_R0_OFFLINE_SUPPORT"
+)
+R1_SPECIAL_FLATTEN_ADMISSION_REPAIR_ARTIFACT_ROOT = (
+    Path("artifacts") / "okx_demo_r1_special_flatten_admission_repair"
+)
 PREPARATION_ARTIFACT_ROOT = (
     Path("artifacts") / "okx_demo_fill_restart_validation" / "preflight_packages"
 )
@@ -242,6 +305,14 @@ PREFLIGHT_SOURCE_FILES = (
     "okx_demo_markout_special_closure_repair_offline.py",
     "okx_demo_owned_cancel_reconciliation_repair_offline.py",
     "okx_demo_post_wall_interruption_audit_offline.py",
+    "okx_demo_r2_session1_interruption_audit_offline.py",
+    "okx_demo_r2_session1_fill_claim_reconciliation_repair_offline.py",
+    "okx_demo_r1_preflight_bootstrap_exposure_audit_offline.py",
+    "okx_demo_r1_preflight_bootstrap_exposure_admission_repair_offline.py",
+    "okx_demo_r2_bootstrap_exposure_admission_repair_offline.py",
+    "okx_demo_r2_special_flatten_classification_repair_offline.py",
+    "okx_demo_r1_special_flatten_admission_repair_offline.py",
+    "okx_demo_r1_clock_skew_repair_offline.py",
     "okx_demo_market_bootstrap_terminal_reconciliation_repair_offline.py",
     "okx_demo_preflight_market_bootstrap_terminal_reconciliation_repair_offline.py",
     "okx_demo_transport_resilience_repair_offline.py",
@@ -278,6 +349,12 @@ PREFLIGHT_SOURCE_FILES = (
     "tests/test_okx_demo_markout_special_closure_repair.py",
     "tests/test_okx_owned_cancel_authoritative_reconciliation.py",
     "tests/test_okx_demo_post_wall_interruption_audit.py",
+    "tests/test_okx_demo_r2_session1_interruption_audit.py",
+    "tests/test_okx_demo_r2_session1_fill_claim_reconciliation_repair.py",
+    "tests/test_okx_demo_r1_preflight_bootstrap_exposure_audit.py",
+    "tests/test_okx_demo_r1_preflight_bootstrap_exposure_admission_repair.py",
+    "tests/test_okx_demo_r2_bootstrap_exposure_admission_repair.py",
+    "tests/test_okx_demo_r1_clock_skew_repair.py",
     "tests/test_okx_demo_multi_session_prepare.py",
     "tests/test_okx_demo_multi_session_supervisor.py",
     "tests/test_okx_demo_operational_failure_campaign.py",
@@ -520,6 +597,44 @@ def expected_arm_token(session_id: str) -> str:
 
 
 def verify_offline_evidence(root: Path, offline_run_id: str) -> dict[str, object]:
+    if offline_run_id.startswith("r1-special-flatten-admission-repair-offline-"):
+        return _verify_r1_special_flatten_admission_repair_evidence(root, offline_run_id)
+    if offline_run_id.startswith("r2-special-flatten-classification-repair-offline-"):
+        return _verify_r2_special_flatten_classification_repair_evidence(
+            root, offline_run_id
+        )
+    if offline_run_id.startswith("r2-bootstrap-exposure-admission-repair-offline-"):
+        return _verify_r2_bootstrap_exposure_admission_repair_evidence(
+            root, offline_run_id
+        )
+    if offline_run_id.startswith("r1-bootstrap-exposure-admission-repair-offline-"):
+        return _verify_r1_bootstrap_exposure_admission_repair_evidence(
+            root, offline_run_id
+        )
+    if offline_run_id.startswith("r1-network-transport-audit-offline-"):
+        return _verify_r1_network_transport_audit_evidence(root, offline_run_id)
+    if offline_run_id.startswith("r2-session5-clock-skew-interruption-audit-offline-"):
+        return _verify_r2_session5_clock_skew_interruption_audit_evidence(root, offline_run_id)
+    if offline_run_id.startswith("r2-terminal-workoff-v2-repair-offline-"):
+        return _verify_r2_terminal_workoff_v2_repair_evidence(root, offline_run_id)
+    if offline_run_id.startswith("r2-terminal-workoff-repair-offline-"):
+        return _verify_r2_terminal_workoff_repair_evidence(root, offline_run_id)
+    if offline_run_id.startswith("r1-clock-skew-repair-offline-"):
+        return _verify_r1_clock_skew_repair_evidence(root, offline_run_id)
+    if offline_run_id.startswith("r2-session1-interruption-audit-offline-"):
+        return _verify_r2_session1_interruption_audit_evidence(root, offline_run_id)
+    if offline_run_id.startswith("r2-session1-fill-claim-repair-offline-"):
+        return _verify_r2_session1_fill_claim_reconciliation_evidence(
+            root, offline_run_id
+        )
+    if offline_run_id.startswith("r2-session5-special-quantity-repair-offline-"):
+        return _verify_r2_session5_special_quantity_reconciliation_evidence(
+            root, offline_run_id
+        )
+    if offline_run_id.startswith("r2-session1-special-closure-repair-offline-"):
+        return _verify_r2_session1_special_closure_reconciliation_evidence(
+            root, offline_run_id
+        )
     if offline_run_id.startswith("r2-session1-cancel-fill-repair-offline-"):
         return _verify_r2_session1_cancel_fill_reconciliation_evidence(
             root, offline_run_id
@@ -854,7 +969,7 @@ def _verify_terminal_causal_cli_evidence(
     endpoint = json.loads(endpoint_path.read_text(encoding="utf-8"))
     secret = json.loads(secret_path.read_text(encoding="utf-8"))
     predecessor = json.loads(predecessor_path.read_text(encoding="utf-8"))
-    suites = ("post_campaign_targeted", "root_non_optuna", "backtest_non_optuna")
+    suites = ("root_non_optuna", "backtest_non_optuna")
     if any((
         terminal.get("status") != TERMINAL_CAUSAL_CLI_READY_STATUS,
         terminal.get("evidence_id") != evidence_id,
@@ -944,7 +1059,7 @@ def _verify_fifo_attribution_evidence(
     secret = json.loads(secret_path.read_text(encoding="utf-8"))
     predecessor = json.loads(predecessor_path.read_text(encoding="utf-8"))
     replay = json.loads(replay_path.read_text(encoding="utf-8"))
-    suites = ("post_campaign_targeted", "root_non_optuna", "backtest_non_optuna")
+    suites = ("root_non_optuna", "backtest_non_optuna")
     if any((
         terminal.get("status") != FIFO_ATTRIBUTION_READY_STATUS,
         terminal.get("evidence_id") != evidence_id,
@@ -1502,6 +1617,88 @@ def _verify_owned_cancel_reconciliation_evidence(
     }
 
 
+def _verify_r2_session1_fill_claim_reconciliation_evidence(
+    root: Path, evidence_id: str
+) -> dict[str, object]:
+    output = root / R2_SESSION1_FILL_CLAIM_RECONCILIATION_ARTIFACT_ROOT / evidence_id
+    terminal_path = output / "R0_R2_SESSION1_FILL_CLAIM_REPAIR_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    targeted_path = output / "tests/r2_session1_fill_claim_targeted_summary.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    predecessor_path = output / "predecessor/failed_session_audit.json"
+    diagnostic_path = output / "diagnostic/root_cause.json"
+    rehearsal_path = output / "diagnostic/promotion_rehearsal.json"
+    required = (
+        terminal_path, decision_path, completion_path, source_path, targeted_path,
+        tests_path, endpoint_path, secret_path, predecessor_path, diagnostic_path,
+        rehearsal_path,
+    )
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("R2 Session 1 fill-claim R0 evidence is incomplete")
+    terminal, decision = _read_json(terminal_path), _read_json(decision_path)
+    targeted, tests = _read_json(targeted_path), _read_json(tests_path)
+    endpoint, secret = _read_json(endpoint_path), _read_json(secret_path)
+    predecessor, diagnostic, rehearsal = (
+        _read_json(predecessor_path), _read_json(diagnostic_path), _read_json(rehearsal_path)
+    )
+    suites = ("root_non_optuna", "backtest_non_optuna")
+    if any((
+        terminal.get("status") != R2_SESSION1_FILL_CLAIM_RECONCILIATION_READY_STATUS,
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("R0_offline_repair_passed") is not True,
+        decision.get("failed_campaign_decision") != "NOT_READY",
+        decision.get("R1_preparation_authorized") is not False,
+        decision.get("economic_campaign_authorized") is not False,
+        any(tests.get(name, {}).get("passed_gate") is not True or tests.get(name, {}).get("returncode") != 0 or tests.get(name, {}).get("network_attempts") != 0 or tests.get(name, {}).get("optuna_imported") is not False for name in suites),
+        targeted.get("passed_gate") is not True or targeted.get("returncode") != 0 or targeted.get("network_attempts") != 0 or targeted.get("optuna_imported") is not False,
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(key) != 0 for key in ("network_attempts", "credential_reads", "demo_endpoint_attempts", "live_endpoint_attempts", "create_attempts", "amend_attempts", "cancel_attempts", "flatten_attempts", "account_configuration_attempts", "orders", "mutation_retries")),
+        secret.get("passed") is not True or secret.get("credential_environment_accessed") is not False or secret.get("credentials_serialized") is not False,
+        predecessor.get("immutable") is not True,
+        predecessor.get("failed_campaign_decision") != "NOT_READY",
+        predecessor.get("active_failed_slot") != 1,
+        predecessor.get("session_1_accepted") is not False,
+        predecessor.get("resume_authorized") is not False,
+        predecessor.get("terminal_account_authoritative") is not False,
+        diagnostic.get("repair", {}).get("targeted_read_only_order_fill_query") is not True,
+        diagnostic.get("repair", {}).get("requires_exact_order_and_client_id") is not True,
+        diagnostic.get("repair", {}).get("timestamp_tolerance_ms") != 1500,
+        diagnostic.get("repair", {}).get("read_attempt_cap") != 3,
+        diagnostic.get("repair", {}).get("unproven_positive_fill_remains_fail_closed") is not True,
+        rehearsal.get("passed") is not True or rehearsal.get("mutation_retries") != 0 or rehearsal.get("risk_limits_changed") is not False,
+    )):
+        raise ReadOnlyPreflightError("R2 Session 1 fill-claim R0 boundary is invalid")
+    manifest = _read_json(completion_path)
+    failures = [relative for relative, expected in manifest.items() if not _hash_matches(output / relative, expected)]
+    sources = _read_json(source_path)
+    source_failures = [relative for relative, expected in sources.items() if not _hash_matches(root / relative, expected)]
+    if failures or source_failures:
+        raise ReadOnlyPreflightError("R2 Session 1 fill-claim evidence or source hash mismatch")
+    return {
+        "passed": True,
+        "evidence_kind": "r2_session1_fill_claim_reconciliation_r0_offline_repair",
+        "offline_run_id": evidence_id,
+        "repair_id": evidence_id,
+        "completion_files_checked": len(manifest),
+        "source_files_checked": len(sources),
+        "completion_hashes_sha256": _sha256(completion_path),
+        "terminal_sha256": _sha256(terminal_path),
+        "decision_sha256": _sha256(decision_path),
+        "failed_package_id": predecessor.get("package_id"),
+        "failed_campaign_run_id": predecessor.get("campaign_run_id"),
+        "failed_session_package_id": predecessor.get("session_package_id"),
+        "failed_campaign_decision": "NOT_READY",
+        "active_failed_slot": 1,
+        "terminal_account_authoritative": False,
+        "resume_authorized": False,
+    }
+
+
 def _verify_r2_session1_cancel_fill_reconciliation_evidence(
     root: Path, evidence_id: str
 ) -> dict[str, object]:
@@ -1551,6 +1748,398 @@ def _verify_r2_session1_cancel_fill_reconciliation_evidence(
     if failures or source_failures:
         raise ReadOnlyPreflightError("R2 Session 1 cancel/fill evidence or source hash mismatch")
     return {"passed": True, "evidence_kind": "r2_session1_cancel_fill_reconciliation_r0_offline_repair", "offline_run_id": evidence_id, "repair_id": evidence_id, "completion_files_checked": len(manifest), "source_files_checked": len(sources), "completion_hashes_sha256": _sha256(completion_path), "terminal_sha256": _sha256(terminal_path), "decision_sha256": _sha256(decision_path), "failed_package_id": predecessor.get("package_id"), "failed_campaign_run_id": predecessor.get("campaign_run_id"), "failed_session_package_id": predecessor.get("session_package_id"), "failed_campaign_decision": "UNRESOLVED_FAIL_CLOSED", "active_failed_slot": 1, "terminal_account_authoritative": False, "resume_authorized": False}
+
+
+def _verify_r2_session1_special_closure_reconciliation_evidence(
+    root: Path, evidence_id: str
+) -> dict[str, object]:
+    output = root / R2_SESSION1_SPECIAL_CLOSURE_RECONCILIATION_ARTIFACT_ROOT / evidence_id
+    terminal_path = output / "R0_R2_SESSION1_SPECIAL_CLOSURE_REPAIR_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    targeted_path = output / "tests/r2_session1_special_closure_targeted_summary.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    predecessor_path = output / "predecessor/failed_session_audit.json"
+    diagnostic_path = output / "diagnostic/root_cause.json"
+    rehearsal_path = output / "diagnostic/promotion_rehearsal.json"
+    required = (
+        terminal_path, decision_path, completion_path, source_path, targeted_path,
+        tests_path, endpoint_path, secret_path, predecessor_path,
+        diagnostic_path, rehearsal_path,
+    )
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError(
+            "R2 Session 1 special-closure R0 evidence is incomplete"
+        )
+    terminal = json.loads(terminal_path.read_text(encoding="utf-8"))
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    targeted = json.loads(targeted_path.read_text(encoding="utf-8"))
+    tests = json.loads(tests_path.read_text(encoding="utf-8"))
+    endpoint = json.loads(endpoint_path.read_text(encoding="utf-8"))
+    secret = json.loads(secret_path.read_text(encoding="utf-8"))
+    predecessor = json.loads(predecessor_path.read_text(encoding="utf-8"))
+    diagnostic = json.loads(diagnostic_path.read_text(encoding="utf-8"))
+    rehearsal = json.loads(rehearsal_path.read_text(encoding="utf-8"))
+    suites = ("post_campaign_targeted", "root_non_optuna", "backtest_non_optuna")
+    if any((
+        terminal.get("status")
+        != R2_SESSION1_SPECIAL_CLOSURE_RECONCILIATION_READY_STATUS,
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("R0_offline_repair_passed") is not True,
+        decision.get("R1_preparation_authorized") is not False,
+        decision.get("economic_campaign_authorized") is not False,
+        any(
+            tests.get(name, {}).get("passed_gate") is not True
+            or tests.get(name, {}).get("returncode") != 0
+            or tests.get(name, {}).get("network_attempts") != 0
+            or tests.get(name, {}).get("live_endpoint_attempts") != 0
+            or tests.get(name, {}).get("optuna_imported") is not False
+            for name in suites
+        ),
+        targeted.get("passed_gate") is not True,
+        targeted.get("returncode") != 0,
+        targeted.get("network_attempts") != 0,
+        targeted.get("live_endpoint_attempts") != 0,
+        targeted.get("optuna_imported") is not False,
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(key) != 0 for key in (
+            "network_attempts", "credential_reads", "demo_endpoint_attempts",
+            "live_endpoint_attempts", "create_attempts", "amend_attempts",
+            "cancel_attempts", "flatten_attempts",
+            "account_configuration_attempts", "orders", "mutation_retries",
+        )),
+        secret.get("passed") is not True,
+        secret.get("credential_environment_accessed") is not False,
+        secret.get("credentials_serialized") is not False,
+        predecessor.get("immutable") is not True,
+        predecessor.get("terminal_account_authoritative") is not True,
+        predecessor.get("final_position_btc") != "0",
+        predecessor.get("final_open_orders") != 0,
+        predecessor.get("flatten_dispatches") != 1,
+        predecessor.get("session_2_started") is not False,
+        diagnostic.get("repair", {}).get("opposing_fill_quantity_is_fifo_netted")
+        is not True,
+        diagnostic.get("repair", {}).get("only_cross_zero_residual_opens_new_causal_lot")
+        is not True,
+        diagnostic.get("repair", {}).get("persistent_ambiguity_blocks_mutation")
+        is not True,
+        diagnostic.get("repair", {}).get("authoritative_terminal_zero_zero_preserved")
+        is not True,
+        rehearsal.get("passed") is not True,
+        rehearsal.get("mutation_retries") != 0,
+        rehearsal.get("risk_limits_changed") is not False,
+    )):
+        raise ReadOnlyPreflightError(
+            "R2 Session 1 special-closure R0 boundary is invalid"
+        )
+    completion_sha256 = _sha256(completion_path)
+    if terminal.get("completion_hashes_sha256") != completion_sha256:
+        raise ReadOnlyPreflightError(
+            "R2 Session 1 special-closure completion hash mismatch"
+        )
+    manifest = json.loads(completion_path.read_text(encoding="utf-8"))
+    failures = [
+        relative for relative, expected in manifest.items()
+        if not _hash_matches(output / relative, expected)
+    ]
+    sources = json.loads(source_path.read_text(encoding="utf-8"))
+    source_failures = [
+        relative for relative, expected in sources.items()
+        if not _hash_matches(root / relative, expected)
+    ]
+    if failures or source_failures:
+        raise ReadOnlyPreflightError(
+            "R2 Session 1 special-closure evidence or source hash mismatch"
+        )
+    return {
+        "passed": True,
+        "evidence_kind": (
+            "r2_session1_special_closure_reconciliation_r0_offline_repair"
+        ),
+        "offline_run_id": evidence_id,
+        "repair_id": evidence_id,
+        "completion_files_checked": len(manifest),
+        "source_files_checked": len(sources),
+        "completion_hashes_sha256": completion_sha256,
+        "terminal_sha256": _sha256(terminal_path),
+        "decision_sha256": _sha256(decision_path),
+        "failed_package_id": predecessor.get("package_id"),
+        "failed_campaign_run_id": predecessor.get("campaign_run_id"),
+        "failed_session_package_id": predecessor.get("session_package_id"),
+        "failed_campaign_decision": "FAILED_TERMINALLY_SAFE",
+        "active_failed_slot": 1,
+        "terminal_account_authoritative": True,
+        "resume_authorized": False,
+    }
+
+
+def _verify_r1_clock_skew_repair_evidence(
+    root: Path, evidence_id: str
+) -> dict[str, object]:
+    output = root / R1_CLOCK_SKEW_REPAIR_ARTIFACT_ROOT / evidence_id
+    terminal_path = output / "R0_R1_CLOCK_SKEW_REPAIR_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    targeted_path = output / "tests/r1_clock_skew_targeted_summary.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    predecessor_path = output / "predecessor/failed_preflight_audit.json"
+    root_cause_path = output / "diagnostic/root_cause.json"
+    required = (terminal_path, decision_path, completion_path, source_path,
+                targeted_path, tests_path, endpoint_path, secret_path,
+                predecessor_path, root_cause_path)
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("R1 clock-skew R0 evidence is incomplete")
+    terminal = _read_json(terminal_path); decision = _read_json(decision_path)
+    targeted = _read_json(targeted_path); tests = _read_json(tests_path)
+    endpoint = _read_json(endpoint_path); secret = _read_json(secret_path)
+    predecessor = _read_json(predecessor_path); root_cause = _read_json(root_cause_path)
+    manifest = _read_json(completion_path); sources = _read_json(source_path)
+    suites = ("root_non_optuna", "backtest_non_optuna")
+    zero_keys = ("network_attempts", "credential_reads", "demo_endpoint_attempts",
+                 "live_endpoint_attempts", "create_attempts", "amend_attempts",
+                 "cancel_attempts", "flatten_attempts", "account_configuration_attempts",
+                 "orders", "mutation_retries")
+    if any((
+        terminal.get("status") != R1_CLOCK_SKEW_REPAIR_READY_STATUS,
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("R0_offline_repair_passed") is not True,
+        decision.get("R1_preparation_authorized") is not False,
+        decision.get("preflight_authorized") is not False,
+        decision.get("economic_campaign_authorized") is not False,
+        any(tests.get(name, {}).get("passed_gate") is not True
+            or tests.get(name, {}).get("returncode") != 0
+            or tests.get(name, {}).get("network_attempts") != 0
+            or tests.get(name, {}).get("live_endpoint_attempts") != 0
+            or tests.get(name, {}).get("optuna_imported") is not False
+            for name in suites),
+        targeted.get("passed_gate") is not True,
+        targeted.get("returncode") != 0,
+        targeted.get("network_attempts") != 0,
+        targeted.get("live_endpoint_attempts") != 0,
+        targeted.get("optuna_imported") is not False,
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(key) != 0 for key in zero_keys),
+        secret.get("passed") is not True,
+        predecessor.get("immutable") is not True,
+        predecessor.get("failure_reason") != "CLOCK_SKEW_EXCEEDS_FROZEN_LIMIT",
+        predecessor.get("terminal_account_authoritative") is not False,
+        predecessor.get("resume_authorized") is not False,
+        root_cause.get("frozen_maximum_clock_skew_ms") != 1500,
+        root_cause.get("code_relaxes_clock_budget") is not False,
+        root_cause.get("external_remediation_required") != "synchronize the network-capable host clock before a fresh R1",
+        any(not isinstance(value, str) or _sha256(root / name) != value
+            for name, value in sources.items()),
+        any(not isinstance(name, str) or not isinstance(value, str)
+            or not (output / name).is_file() or _sha256(output / name) != value
+            for name, value in manifest.items()),
+    )):
+        raise ReadOnlyPreflightError("R1 clock-skew R0 evidence mismatch")
+    return {
+        "passed": True, "evidence_kind": "r1_clock_skew_r0_offline_repair",
+        "offline_run_id": evidence_id, "repair_id": evidence_id,
+        "completion_files_checked": len(manifest),
+        "completion_hashes_sha256": _sha256(completion_path),
+        "terminal_sha256": _sha256(terminal_path), "decision_sha256": _sha256(decision_path),
+        "failed_preparation_id": predecessor.get("preparation_id"),
+        "failed_run_id": predecessor.get("run_id"), "failed_session_id": predecessor.get("session_id"),
+        "failed_campaign_decision": "NOT_READY", "terminal_account_authoritative": False,
+        "resume_authorized": False,
+    }
+
+
+def _verify_r2_session1_interruption_audit_evidence(
+    root: Path, evidence_id: str
+) -> dict[str, object]:
+    output = root / R2_SESSION1_INTERRUPTION_AUDIT_ARTIFACT_ROOT / evidence_id
+    terminal_path = output / "R0_R2_SESSION1_INTERRUPTION_AUDIT_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    targeted_path = output / "tests/r2_session1_interruption_targeted_summary.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    predecessor_path = output / "predecessor/interrupted_campaign_audit.json"
+    transition_path = output / "diagnostic/interruption_transition.json"
+    required = (terminal_path, decision_path, completion_path, source_path,
+                targeted_path, tests_path, endpoint_path, secret_path,
+                predecessor_path, transition_path)
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("R2 Session 1 interruption R0 evidence is incomplete")
+    terminal = _read_json(terminal_path); decision = _read_json(decision_path)
+    targeted = _read_json(targeted_path); tests = _read_json(tests_path)
+    endpoint = _read_json(endpoint_path); secret = _read_json(secret_path)
+    predecessor = _read_json(predecessor_path); transition = _read_json(transition_path)
+    manifest = _read_json(completion_path); sources = _read_json(source_path)
+    suites = ("post_campaign_targeted", "root_non_optuna", "backtest_non_optuna")
+    zero_keys = ("network_attempts", "credential_reads", "demo_endpoint_attempts",
+                 "live_endpoint_attempts", "create_attempts", "amend_attempts",
+                 "cancel_attempts", "flatten_attempts", "account_configuration_attempts",
+                 "orders", "mutation_retries")
+    if any((
+        terminal.get("status") != R2_SESSION1_INTERRUPTION_AUDIT_READY_STATUS,
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("R0_offline_audit_passed") is not True,
+        decision.get("R1_preparation_authorized") is not False,
+        decision.get("preflight_authorized") is not False,
+        decision.get("economic_campaign_authorized") is not False,
+        any(tests.get(name, {}).get("passed_gate") is not True
+            or tests.get(name, {}).get("returncode") != 0
+            or tests.get(name, {}).get("network_attempts") != 0
+            or tests.get(name, {}).get("live_endpoint_attempts") != 0
+            or tests.get(name, {}).get("optuna_imported") is not False
+            for name in suites),
+        targeted.get("passed_gate") is not True,
+        targeted.get("returncode") != 0,
+        targeted.get("network_attempts") != 0,
+        targeted.get("live_endpoint_attempts") != 0,
+        targeted.get("optuna_imported") is not False,
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(key) != 0 for key in zero_keys),
+        secret.get("passed") is not True,
+        predecessor.get("immutable") is not True,
+        predecessor.get("campaign_wall_expired") is not True,
+        predecessor.get("active_slot") != 1,
+        predecessor.get("terminal_account_authoritative") is not False,
+        predecessor.get("authoritative_account_unknown") is not True,
+        predecessor.get("session_marker_reuse_refused") is not True,
+        predecessor.get("resume_authorized") is not False,
+        predecessor.get("retry_authorized") is not False,
+        predecessor.get("accept_authorized") is not False,
+        predecessor.get("session_2_started") is not False,
+        transition.get("account_authority") != "unknown_without_network_read",
+        transition.get("resume_same_campaign") is not False,
+        transition.get("retry_same_identity") is not False,
+        transition.get("next_session_started") is not False,
+        any(not isinstance(value, str) or _sha256(root / name) != value
+            for name, value in sources.items()),
+        any(not isinstance(name, str) or not isinstance(value, str)
+            or not (output / name).is_file() or _sha256(output / name) != value
+            for name, value in manifest.items()),
+    )):
+        raise ReadOnlyPreflightError("R2 Session 1 interruption R0 evidence mismatch")
+    return {
+        "passed": True,
+        "evidence_kind": "r2_session1_interruption_audit_r0_offline",
+        "offline_run_id": evidence_id, "repair_id": evidence_id,
+        "completion_files_checked": len(manifest),
+        "completion_hashes_sha256": _sha256(completion_path),
+        "terminal_sha256": _sha256(terminal_path),
+        "decision_sha256": _sha256(decision_path),
+        "failed_package_id": predecessor.get("package_id"),
+        "failed_campaign_run_id": predecessor.get("campaign_run_id"),
+        "failed_session_package_id": predecessor.get("active_session_package_id"),
+        "failed_campaign_decision": "INTERRUPTED_WALL_EXPIRED_ACCOUNT_UNKNOWN",
+        "active_failed_slot": 1,
+        "terminal_account_authoritative": False,
+        "resume_authorized": False,
+    }
+
+
+def _verify_r2_session5_special_quantity_reconciliation_evidence(
+    root: Path, evidence_id: str
+) -> dict[str, object]:
+    output = root / R2_SESSION5_SPECIAL_QUANTITY_RECONCILIATION_ARTIFACT_ROOT / evidence_id
+    terminal_path = output / "R0_R2_SESSION5_SPECIAL_QUANTITY_REPAIR_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    targeted_path = output / "tests/r2_session5_special_quantity_targeted_summary.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    predecessor_path = output / "predecessor/failed_session_audit.json"
+    diagnostic_path = output / "diagnostic/root_cause.json"
+    rehearsal_path = output / "diagnostic/promotion_rehearsal.json"
+    required = (terminal_path, decision_path, completion_path, source_path,
+                targeted_path, tests_path, endpoint_path, secret_path,
+                predecessor_path, diagnostic_path, rehearsal_path)
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("R2 Session 5 special quantity R0 evidence is incomplete")
+    terminal = json.loads(terminal_path.read_text(encoding="utf-8"))
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    targeted = json.loads(targeted_path.read_text(encoding="utf-8"))
+    tests = json.loads(tests_path.read_text(encoding="utf-8"))
+    endpoint = json.loads(endpoint_path.read_text(encoding="utf-8"))
+    secret = json.loads(secret_path.read_text(encoding="utf-8"))
+    predecessor = json.loads(predecessor_path.read_text(encoding="utf-8"))
+    diagnostic = json.loads(diagnostic_path.read_text(encoding="utf-8"))
+    rehearsal = json.loads(rehearsal_path.read_text(encoding="utf-8"))
+    suites = ("post_campaign_targeted", "root_non_optuna", "backtest_non_optuna")
+    if any((
+        terminal.get("status") != R2_SESSION5_SPECIAL_QUANTITY_RECONCILIATION_READY_STATUS,
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("R0_offline_repair_passed") is not True,
+        decision.get("R1_preparation_authorized") is not False,
+        decision.get("economic_campaign_authorized") is not False,
+        any(tests.get(name, {}).get("passed_gate") is not True
+            or tests.get(name, {}).get("returncode") != 0
+            or tests.get(name, {}).get("network_attempts") != 0
+            or tests.get(name, {}).get("live_endpoint_attempts") != 0
+            or tests.get(name, {}).get("optuna_imported") is not False
+            for name in suites),
+        targeted.get("passed_gate") is not True,
+        targeted.get("returncode") != 0,
+        targeted.get("network_attempts") != 0,
+        targeted.get("live_endpoint_attempts") != 0,
+        targeted.get("optuna_imported") is not False,
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(key) != 0 for key in (
+            "network_attempts", "credential_reads", "demo_endpoint_attempts",
+            "live_endpoint_attempts", "create_attempts", "amend_attempts",
+            "cancel_attempts", "flatten_attempts", "account_configuration_attempts",
+            "orders", "mutation_retries")),
+        secret.get("passed") is not True,
+        predecessor.get("immutable") is not True,
+        predecessor.get("active_failed_slot") != 5,
+        predecessor.get("session_6_started") is not False,
+        predecessor.get("terminal_account_authoritative") is not True,
+        predecessor.get("final_position_btc") != "0",
+        predecessor.get("final_open_orders") != 0,
+        diagnostic.get("quantity_identity_reconciles") is not True,
+        diagnostic.get("repair", {}).get("partial_workoff_residual_is_valid") is not True,
+        diagnostic.get("repair", {}).get("forged_quantity_or_identity_fails_closed") is not True,
+        rehearsal.get("passed") is not True,
+        rehearsal.get("mutation_retries") != 0,
+        rehearsal.get("risk_limits_changed") is not False,
+    )):
+        raise ReadOnlyPreflightError("R2 Session 5 special quantity R0 boundary is invalid")
+    completion_sha256 = _sha256(completion_path)
+    if terminal.get("completion_hashes_sha256") != completion_sha256:
+        raise ReadOnlyPreflightError("R2 Session 5 special quantity completion hash mismatch")
+    manifest = json.loads(completion_path.read_text(encoding="utf-8"))
+    failures = [relative for relative, expected in manifest.items()
+                if not _hash_matches(output / relative, expected)]
+    sources = json.loads(source_path.read_text(encoding="utf-8"))
+    source_failures = [relative for relative, expected in sources.items()
+                       if not _hash_matches(root / relative, expected)]
+    if failures or source_failures:
+        raise ReadOnlyPreflightError("R2 Session 5 special quantity evidence or source hash mismatch")
+    return {
+        "passed": True,
+        "evidence_kind": "r2_session5_special_quantity_reconciliation_r0_offline_repair",
+        "offline_run_id": evidence_id, "repair_id": evidence_id,
+        "completion_files_checked": len(manifest), "source_files_checked": len(sources),
+        "completion_hashes_sha256": completion_sha256,
+        "terminal_sha256": _sha256(terminal_path),
+        "decision_sha256": _sha256(decision_path),
+        "failed_package_id": predecessor.get("package_id"),
+        "failed_campaign_run_id": predecessor.get("campaign_run_id"),
+        "failed_session_package_id": predecessor.get("session_package_id"),
+        "failed_campaign_decision": "FAILED_TERMINALLY_SAFE",
+        "active_failed_slot": 5, "terminal_account_authoritative": True,
+        "resume_authorized": False,
+    }
 
 
 def _verify_r2_session5_terminal_reconciliation_evidence(
@@ -3330,6 +3919,13 @@ def verify_preflight_preparation(
             "execution_environment_transport_r0_offline_repair",
             "r2_session5_terminal_reconciliation_r0_offline_repair",
             "r2_session1_cancel_fill_reconciliation_r0_offline_repair",
+            "r2_session1_fill_claim_reconciliation_r0_offline_repair",
+            "r2_session1_special_closure_reconciliation_r0_offline_repair",
+            "r2_session5_special_quantity_reconciliation_r0_offline_repair",
+            "r1_preflight_bootstrap_exposure_admission_r0_offline_repair",
+            "r2_bootstrap_exposure_admission_r0_offline_repair",
+            "r2_special_flatten_classification_r0_offline_repair",
+            "r1_special_flatten_admission_r0_offline_repair",
         }
         and spec.get("protocol_id")
         != "okx-demo-multi-session-a1-preflight-preparation-v1"
@@ -3545,6 +4141,112 @@ def _preflight_predecessor_audit(
             "session_package_id": offline.get("failed_session_package_id"),
             "resume_authorized": False,
         }
+    if evidence_kind == "r2_session1_fill_claim_reconciliation_r0_offline_repair":
+        return {
+            "passed": bool(
+                offline.get("failed_campaign_decision") == "NOT_READY"
+                and offline.get("active_failed_slot") == 1
+                and offline.get("terminal_account_authoritative") is False
+                and offline.get("resume_authorized") is False
+            ),
+            "authority": "immutable_not_ready_R2_session1_via_fill_claim_reconciliation_R0",
+            "package_id": offline.get("failed_package_id"),
+            "campaign_run_id": offline.get("failed_campaign_run_id"),
+            "session_package_id": offline.get("failed_session_package_id"),
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r1_preflight_bootstrap_exposure_admission_r0_offline_repair":
+        return {
+            "passed": bool(
+                offline.get("failed_preflight_decision") == "READ_ONLY_PREFLIGHT_FAILED"
+                and offline.get("failure_reason") == "UNOWNED_DEMO_EXPOSURE"
+                and offline.get("terminal_account_authoritative") is False
+                and offline.get("rerun_authorized") is False
+                and offline.get("resume_authorized") is False
+            ),
+            "authority": "immutable_failed_R1_via_bootstrap_exposure_admission_R0",
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r2_bootstrap_exposure_admission_r0_offline_repair":
+        return {
+            "passed": bool(
+                offline.get("r1_preflight_passed") is True
+                and offline.get("r1_mutation_attempts") == 0
+                and offline.get("r1_live_endpoint_attempts") == 0
+                and offline.get("failed_R1_identity_reusable") is False
+                and offline.get("resume_authorized") is False
+            ),
+            "authority": "immutable_passed_R1_via_R2_bootstrap_exposure_admission_R0",
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r1_special_flatten_admission_r0_offline_repair":
+        return {
+            "passed": bool(
+                offline.get("failed_preflight_decision") == "READ_ONLY_PREFLIGHT_FAILED"
+                and offline.get("failed_identity_reusable") is False
+                and offline.get("rerun_authorized") is False
+                and offline.get("resume_authorized") is False
+            ),
+            "authority": "immutable_failed_R1_via_special_flatten_admission_R0",
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r2_special_flatten_classification_r0_offline_repair":
+        return {
+            "passed": bool(
+                offline.get("failed_campaign_decision") == "NOT_READY"
+                and offline.get("terminal_account_authoritative") is False
+                and offline.get("special_flatten_sessions") == 2
+                and offline.get("resume_authorized") is False
+                and offline.get("identity_reuse_authorized") is False
+            ),
+            "authority": "immutable_frozen_R2_via_special_flatten_classification_R0",
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r2_session1_special_closure_reconciliation_r0_offline_repair":
+        return {
+            "passed": bool(
+                offline.get("failed_campaign_decision") == "FAILED_TERMINALLY_SAFE"
+                and offline.get("active_failed_slot") == 1
+                and offline.get("terminal_account_authoritative") is True
+                and offline.get("resume_authorized") is False
+            ),
+            "authority": (
+                "immutable_failed_R2_session1_via_special_closure_reconciliation_R0"
+            ),
+            "package_id": offline.get("failed_package_id"),
+            "campaign_run_id": offline.get("failed_campaign_run_id"),
+            "session_package_id": offline.get("failed_session_package_id"),
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r2_session5_special_quantity_reconciliation_r0_offline_repair":
+        return {
+            "passed": bool(
+                offline.get("failed_campaign_decision") == "FAILED_TERMINALLY_SAFE"
+                and offline.get("active_failed_slot") == 5
+                and offline.get("terminal_account_authoritative") is True
+                and offline.get("resume_authorized") is False
+            ),
+            "authority": "immutable_failed_R2_session5_via_special_quantity_reconciliation_R0",
+            "package_id": offline.get("failed_package_id"),
+            "campaign_run_id": offline.get("failed_campaign_run_id"),
+            "session_package_id": offline.get("failed_session_package_id"),
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r2_session1_interruption_audit_r0_offline":
+        return {
+            "passed": bool(
+                offline.get("failed_campaign_decision")
+                == "INTERRUPTED_WALL_EXPIRED_ACCOUNT_UNKNOWN"
+                and offline.get("active_failed_slot") == 1
+                and offline.get("terminal_account_authoritative") is False
+                and offline.get("resume_authorized") is False
+            ),
+            "authority": "immutable_wall_expired_R2_session1_via_interruption_R0",
+            "package_id": offline.get("failed_package_id"),
+            "campaign_run_id": offline.get("failed_campaign_run_id"),
+            "session_package_id": offline.get("failed_session_package_id"),
+            "resume_authorized": False,
+        }
     if evidence_kind == "post_wall_interruption_r0_offline_audit":
         return {
             "passed": bool(
@@ -3580,6 +4282,70 @@ def _preflight_predecessor_audit(
         return {"passed": offline.get("failed_campaign_decision") == "NOT_READY", "authority": "immutable_failed_R1_preflight_via_transport_resilience_R0", "preparation_id": offline.get("failed_preparation_id"), "run_id": offline.get("failed_run_id"), "resume_authorized": False}
     if evidence_kind == "execution_environment_transport_r0_offline_repair":
         return {"passed": offline.get("failed_campaign_decision") == "NOT_READY", "authority": "immutable_sandbox_blocked_R1_preflight_via_execution_environment_transport_R0", "preparation_id": offline.get("failed_preparation_id"), "run_id": offline.get("failed_run_id"), "resume_authorized": False}
+    if evidence_kind == "r1_clock_skew_r0_offline_repair":
+        return {
+            "passed": bool(
+                offline.get("failed_campaign_decision") == "NOT_READY"
+                and offline.get("terminal_account_authoritative") is False
+                and offline.get("resume_authorized") is False
+            ),
+            "authority": "immutable_clock_skew_failed_R1_via_R0_repair",
+            "preparation_id": offline.get("failed_preparation_id"),
+            "run_id": offline.get("failed_run_id"),
+            "session_id": offline.get("failed_session_id"),
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r2_terminal_workoff_r0_offline_repair":
+        return {
+            "passed": bool(
+                offline.get("failed_campaign_decision") == "NOT_READY"
+                and offline.get("terminal_account_authoritative") is True
+                and offline.get("resume_authorized") is False
+            ),
+            "authority": "immutable_not_ready_R2_campaign_via_terminal_workoff_R0",
+            "package_id": offline.get("failed_package_id"),
+            "campaign_run_id": offline.get("failed_campaign_run_id"),
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r2_terminal_workoff_v2_r0_offline_repair":
+        return {
+            "passed": bool(
+                offline.get("failed_campaign_decision") == "NOT_READY"
+                and offline.get("terminal_account_authoritative") is True
+                and offline.get("resume_authorized") is False
+            ),
+            "authority": "immutable_not_ready_R2_campaign_via_terminal_workoff_v2_R0",
+            "package_id": offline.get("failed_package_id"),
+            "campaign_run_id": offline.get("failed_campaign_run_id"),
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r2_session5_clock_skew_interruption_audit_r0_offline":
+        return {
+            "passed": bool(
+                offline.get("failed_campaign_decision") == "NOT_READY"
+                and offline.get("terminal_account_authoritative") is True
+                and offline.get("resume_authorized") is False
+                and offline.get("accept_authorized") is False
+                and offline.get("failed_session_slot") == 5
+            ),
+            "authority": "immutable_not_ready_R2_session5_clock_skew_via_R0_audit",
+            "package_id": offline.get("failed_package_id"),
+            "campaign_run_id": offline.get("failed_campaign_run_id"),
+            "resume_authorized": False,
+        }
+    if evidence_kind == "r1_network_transport_audit_r0_offline":
+        return {
+            "passed": bool(
+                offline.get("failed_preflight_decision") == "READ_ONLY_PREFLIGHT_FAILED"
+                and offline.get("terminal_account_authoritative") is False
+                and offline.get("rerun_authorized") is False
+            ),
+            "authority": "immutable_failed_R1_network_transport_via_R0_audit",
+            "preparation_id": offline.get("failed_preparation_id"),
+            "run_id": offline.get("failed_run_id"),
+            "session_id": offline.get("failed_session_id"),
+            "resume_authorized": False,
+        }
     if evidence_kind in {
         "activity_budget_shutdown_repair",
         "future_book_timestamp_repair",
@@ -3608,6 +4374,580 @@ def _preflight_predecessor_audit(
             ),
         }
     return verify_predecessors(root)
+
+
+def _verify_r2_terminal_workoff_repair_evidence(
+    root: Path, evidence_id: str
+) -> dict[str, object]:
+    output = root / "artifacts/okx_demo_r2_terminal_workoff_repair" / evidence_id
+    terminal_path = output / "R0_R2_TERMINAL_WORKOFF_REPAIR_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    targeted_path = output / "tests/r2_terminal_workoff_targeted_summary.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    predecessor_path = output / "predecessor/campaign_audit.json"
+    root_cause_path = output / "diagnostic/root_cause.json"
+    required = (terminal_path, decision_path, completion_path, source_path,
+                targeted_path, tests_path, endpoint_path, secret_path,
+                predecessor_path, root_cause_path)
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("R2 terminal work-off R0 evidence is incomplete")
+    terminal = _read_json(terminal_path); decision = _read_json(decision_path)
+    targeted = _read_json(targeted_path); tests = _read_json(tests_path)
+    endpoint = _read_json(endpoint_path); secret = _read_json(secret_path)
+    predecessor = _read_json(predecessor_path); root_cause = _read_json(root_cause_path)
+    manifest = _read_json(completion_path); sources = _read_json(source_path)
+    suites = ("post_campaign_targeted", "root_non_optuna", "backtest_non_optuna")
+    zero_keys = ("network_attempts", "credential_reads", "demo_endpoint_attempts",
+                 "live_endpoint_attempts", "create_attempts", "amend_attempts",
+                 "cancel_attempts", "flatten_attempts", "account_configuration_attempts",
+                 "orders", "mutation_retries")
+    if any((
+        terminal.get("status") != "OKX_DEMO_R2_TERMINAL_WORKOFF_REPAIR_R0_OFFLINE_SUPPORT",
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("R0_offline_repair_passed") is not True,
+        decision.get("R1_preparation_authorized") is not False,
+        decision.get("preflight_authorized") is not False,
+        decision.get("economic_campaign_authorized") is not False,
+        any(tests.get(name, {}).get("passed_gate") is not True
+            or tests.get(name, {}).get("returncode") != 0
+            or tests.get(name, {}).get("network_attempts") != 0
+            or tests.get(name, {}).get("live_endpoint_attempts") != 0
+            or tests.get(name, {}).get("optuna_imported") is not False
+            for name in suites),
+        targeted.get("passed_gate") is not True,
+        targeted.get("returncode") != 0,
+        targeted.get("network_attempts") != 0,
+        targeted.get("live_endpoint_attempts") != 0,
+        targeted.get("optuna_imported") is not False,
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(key) != 0 for key in zero_keys),
+        secret.get("passed") is not True,
+        predecessor.get("immutable") is not True,
+        predecessor.get("terminal_decision") != "NOT_READY",
+        predecessor.get("terminal_position_open_orders") != "0/0",
+        predecessor.get("special_flatten_sessions") != 5,
+        predecessor.get("normal_fill_count") != 112,
+        predecessor.get("causal_reentry_records") != 107,
+        predecessor.get("resume_authorized") is not False,
+        predecessor.get("identity_reuse_authorized") is not False,
+        root_cause.get("terminal_special_flatten_is_causal_reentry") is not False,
+        root_cause.get("persistent_ambiguity_blocks_mutation") is not True,
+        any(not isinstance(value, str) or _sha256(root / name) != value
+            for name, value in sources.items()),
+        any(not isinstance(name, str) or not isinstance(value, str)
+            or not (output / name).is_file() or _sha256(output / name) != value
+            for name, value in manifest.items()),
+    )):
+        raise ReadOnlyPreflightError("R2 terminal work-off R0 evidence mismatch")
+    return {
+        "passed": True, "evidence_kind": "r2_terminal_workoff_r0_offline_repair",
+        "offline_run_id": evidence_id, "repair_id": evidence_id,
+        "completion_files_checked": len(manifest),
+        "completion_hashes_sha256": _sha256(completion_path),
+        "terminal_sha256": _sha256(terminal_path), "decision_sha256": _sha256(decision_path),
+        "failed_package_id": predecessor.get("package_id"),
+        "failed_campaign_run_id": predecessor.get("campaign_run_id"),
+        "failed_campaign_decision": "NOT_READY", "terminal_account_authoritative": True,
+        "resume_authorized": False,
+    }
+
+
+def _verify_r2_terminal_workoff_v2_repair_evidence(
+    root: Path, evidence_id: str,
+) -> dict[str, object]:
+    output = root / "artifacts/okx_demo_r2_terminal_workoff_v2_repair" / evidence_id
+    terminal_path = output / "R0_R2_TERMINAL_WORKOFF_V2_REPAIR_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    predecessor_path = output / "predecessor/campaign_audit.json"
+    root_cause_path = output / "diagnostic/root_cause.json"
+    required = (terminal_path, decision_path, completion_path, source_path, tests_path,
+                endpoint_path, secret_path, predecessor_path, root_cause_path)
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("R2 terminal work-off v2 R0 evidence is incomplete")
+    terminal = _read_json(terminal_path); decision = _read_json(decision_path)
+    tests = _read_json(tests_path); endpoint = _read_json(endpoint_path)
+    secret = _read_json(secret_path); predecessor = _read_json(predecessor_path)
+    root_cause = _read_json(root_cause_path); manifest = _read_json(completion_path)
+    sources = _read_json(source_path)
+    suites = ("targeted", "root_non_optuna", "backtest_non_optuna")
+    zero_keys = ("network_attempts", "credential_reads", "demo_endpoint_attempts",
+                 "live_endpoint_attempts", "create_attempts", "amend_attempts",
+                 "cancel_attempts", "flatten_attempts", "account_configuration_attempts",
+                 "orders", "mutation_retries")
+    if any((
+        terminal.get("status") != "OKX_DEMO_R2_TERMINAL_WORKOFF_V2_REPAIR_R0_OFFLINE_SUPPORT",
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("evidence_kind") != "r2_terminal_workoff_v2_r0_offline_repair",
+        decision.get("R0_offline_repair_passed") is not True,
+        decision.get("preflight_authorized") is not False,
+        decision.get("economic_campaign_authorized") is not False,
+        any(tests.get(name, {}).get("passed_gate") is not True
+            or tests.get(name, {}).get("returncode") != 0
+            or tests.get(name, {}).get("network_attempts") != 0
+            or tests.get(name, {}).get("live_endpoint_attempts") != 0
+            or tests.get(name, {}).get("optuna_imported") is not False
+            for name in suites),
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(key) != 0 for key in zero_keys),
+        secret.get("passed") is not True,
+        predecessor.get("immutable") is not True,
+        predecessor.get("terminal_decision") != "NOT_READY",
+        predecessor.get("special_flatten_sessions") != 3,
+        predecessor.get("maximum_special_flatten_sessions") != 2,
+        predecessor.get("resume_authorized") is not False,
+        predecessor.get("identity_reuse_authorized") is not False,
+        root_cause.get("risk_expansion") is not False,
+        root_cause.get("special_flatten_is_not_causal_maker_reentry") is not True,
+        root_cause.get("persistent_ambiguity_blocks_mutation") is not True,
+        any(not isinstance(value, str) or _sha256(root / name) != value
+            for name, value in sources.items()),
+        any(not isinstance(name, str) or not isinstance(value, str)
+            or not (output / name).is_file() or _sha256(output / name) != value
+            for name, value in manifest.items()),
+    )):
+        raise ReadOnlyPreflightError("R2 terminal work-off v2 R0 evidence mismatch")
+    return {
+        "passed": True, "evidence_kind": "r2_terminal_workoff_v2_r0_offline_repair",
+        "offline_run_id": evidence_id, "repair_id": evidence_id,
+        "completion_files_checked": len(manifest),
+        "completion_hashes_sha256": _sha256(completion_path),
+        "terminal_sha256": _sha256(terminal_path), "decision_sha256": _sha256(decision_path),
+        "failed_package_id": predecessor.get("package_id"),
+        "failed_campaign_run_id": predecessor.get("campaign_run_id"),
+        "failed_campaign_decision": "NOT_READY", "terminal_account_authoritative": True,
+        "resume_authorized": False,
+    }
+
+
+def _verify_r2_session5_clock_skew_interruption_audit_evidence(
+    root: Path, evidence_id: str,
+) -> dict[str, object]:
+    output = root / "artifacts/okx_demo_r2_session5_clock_skew_interruption_audit" / evidence_id
+    terminal_path = output / "R0_R2_SESSION5_CLOCK_SKEW_INTERRUPTION_AUDIT_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    predecessor_path = output / "predecessor/session5_clock_skew_audit.json"
+    required = (terminal_path, decision_path, completion_path, source_path, tests_path,
+                endpoint_path, secret_path, predecessor_path)
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("R2 Session 5 clock-skew R0 audit is incomplete")
+    terminal = _read_json(terminal_path); decision = _read_json(decision_path)
+    tests = _read_json(tests_path); endpoint = _read_json(endpoint_path)
+    secret = _read_json(secret_path); predecessor = _read_json(predecessor_path)
+    manifest = _read_json(completion_path); sources = _read_json(source_path)
+    suites = ("targeted", "root_non_optuna", "backtest_non_optuna")
+    zero_keys = ("network_attempts", "credential_reads", "demo_endpoint_attempts",
+                 "live_endpoint_attempts", "create_attempts", "amend_attempts",
+                 "cancel_attempts", "flatten_attempts", "account_configuration_attempts",
+                 "orders", "mutation_retries")
+    if any((
+        terminal.get("status") != "OKX_DEMO_R2_SESSION5_CLOCK_SKEW_INTERRUPTION_AUDIT_R0_OFFLINE_SUPPORT",
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("evidence_kind") != "r2_session5_clock_skew_interruption_audit_r0_offline",
+        decision.get("R0_offline_audit_passed") is not True,
+        decision.get("preflight_authorized") is not False,
+        decision.get("economic_campaign_authorized") is not False,
+        any(tests.get(name, {}).get("passed_gate") is not True
+            or tests.get(name, {}).get("returncode") != 0
+            or tests.get(name, {}).get("network_attempts") != 0
+            or tests.get(name, {}).get("optuna_imported") is not False for name in suites),
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(key) != 0 for key in zero_keys),
+        secret.get("passed") is not True,
+        predecessor.get("immutable") is not True,
+        predecessor.get("failed_campaign_decision") != "NOT_READY",
+        predecessor.get("failure_stage") != "POST_BOOTSTRAP",
+        predecessor.get("clock_skew_gate_failed_before_mutation") is not True,
+        predecessor.get("controller_engine_gateway_reconciled") is not False,
+        predecessor.get("terminal_account_authoritative") is not True,
+        predecessor.get("terminal_position_open_orders") != ["0", 0],
+        predecessor.get("resume_authorized") is not False,
+        predecessor.get("accept_authorized") is not False,
+        any(not isinstance(value, str) or _sha256(root / name) != value
+            for name, value in sources.items()),
+        any(not isinstance(name, str) or not isinstance(value, str)
+            or not (output / name).is_file() or _sha256(output / name) != value
+            for name, value in manifest.items()),
+    )):
+        raise ReadOnlyPreflightError("R2 Session 5 clock-skew R0 audit mismatch")
+    return {
+        "passed": True, "evidence_kind": "r2_session5_clock_skew_interruption_audit_r0_offline",
+        "offline_run_id": evidence_id, "repair_id": evidence_id,
+        "completion_files_checked": len(manifest),
+        "completion_hashes_sha256": _sha256(completion_path),
+        "terminal_sha256": _sha256(terminal_path), "decision_sha256": _sha256(decision_path),
+        "failed_package_id": predecessor.get("package_id"),
+        "failed_campaign_run_id": predecessor.get("campaign_run_id"),
+        "failed_campaign_decision": "NOT_READY", "terminal_account_authoritative": True,
+        "failed_session_slot": 5, "resume_authorized": False, "accept_authorized": False,
+    }
+
+
+def _verify_r1_special_flatten_admission_repair_evidence(
+    root: Path, evidence_id: str
+) -> dict[str, object]:
+    output = root / R1_SPECIAL_FLATTEN_ADMISSION_REPAIR_ARTIFACT_ROOT / evidence_id
+    terminal_path = output / "R0_R1_SPECIAL_FLATTEN_ADMISSION_REPAIR_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    predecessor_path = output / "predecessor/admission_predecessor_audit.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    required = (terminal_path, decision_path, completion_path, source_path,
+                predecessor_path, tests_path, endpoint_path, secret_path)
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("special-flatten admission repair evidence is incomplete")
+    terminal, decision, predecessor, tests, endpoint, secret = (
+        _read_json(path) for path in (terminal_path, decision_path, predecessor_path,
+                                      tests_path, endpoint_path, secret_path)
+    )
+    summaries = list(tests.values())
+    if any((
+        terminal.get("status") != R1_SPECIAL_FLATTEN_ADMISSION_REPAIR_READY_STATUS,
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("evidence_kind") != "r1_special_flatten_admission_r0_offline_repair",
+        decision.get("R0_offline_repair_passed") is not True,
+        decision.get("preflight_authorized") is not False,
+        predecessor.get("predecessor_evidence_kind") != "r2_special_flatten_classification_r0_offline_repair",
+        predecessor.get("predecessor_special_flatten_sessions") != 2,
+        predecessor.get("predecessor_terminal_account_authoritative") is not False,
+        predecessor.get("admission_passed") is not True,
+        predecessor.get("failed_identity_reusable") is not False,
+        predecessor.get("rerun_authorized") is not False,
+        predecessor.get("resume_authorized") is not False,
+        predecessor.get("orders_or_mutations_in_failed_run") != 0,
+        not summaries,
+        any(item.get("passed_gate") is not True or item.get("returncode") != 0
+            or item.get("network_attempts") != 0
+            or item.get("live_endpoint_attempts") != 0
+            or item.get("optuna_imported") is not False for item in summaries),
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(name) != 0 for name in (
+            "network_attempts", "credential_reads", "demo_endpoint_attempts",
+            "live_endpoint_attempts", "create_attempts", "amend_attempts",
+            "cancel_attempts", "flatten_attempts", "orders", "mutation_retries",
+        )),
+        secret.get("passed") is not True,
+    )):
+        raise ReadOnlyPreflightError("special-flatten admission repair evidence is invalid")
+    manifest = _read_json(completion_path)
+    if any(not _hash_matches(output / relative, expected)
+           for relative, expected in manifest.items()):
+        raise ReadOnlyPreflightError("special-flatten admission completion hash mismatch")
+    sources = _read_json(source_path)
+    if any(not _hash_matches(root / relative, expected)
+           for relative, expected in sources.items()):
+        raise ReadOnlyPreflightError("special-flatten admission source hash mismatch")
+    return {
+        "passed": True,
+        "evidence_kind": "r1_special_flatten_admission_r0_offline_repair",
+        "offline_run_id": evidence_id, "repair_id": evidence_id,
+        "completion_files_checked": len(manifest), "source_files_checked": len(sources),
+        "completion_hashes_sha256": _sha256(completion_path),
+        "terminal_sha256": _sha256(terminal_path), "decision_sha256": _sha256(decision_path),
+        "failed_preflight_decision": "READ_ONLY_PREFLIGHT_FAILED",
+        "failed_identity_reusable": False, "rerun_authorized": False,
+        "resume_authorized": False,
+    }
+
+
+def _verify_r2_special_flatten_classification_repair_evidence(
+    root: Path, evidence_id: str
+) -> dict[str, object]:
+    output = root / R2_SPECIAL_FLATTEN_CLASSIFICATION_REPAIR_ARTIFACT_ROOT / evidence_id
+    terminal_path = output / "R0_R2_SPECIAL_FLATTEN_CLASSIFICATION_REPAIR_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    predecessor_path = output / "predecessor/campaign_freeze_audit.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    required = (terminal_path, decision_path, completion_path, source_path,
+                predecessor_path, tests_path, endpoint_path, secret_path)
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("special-flatten classification evidence is incomplete")
+    terminal, decision, predecessor, tests, endpoint, secret = (
+        _read_json(path) for path in (terminal_path, decision_path, predecessor_path,
+                                      tests_path, endpoint_path, secret_path)
+    )
+    summaries = list(tests.values())
+    if any((
+        terminal.get("status") != R2_SPECIAL_FLATTEN_CLASSIFICATION_REPAIR_READY_STATUS,
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("evidence_kind") != "r2_special_flatten_classification_r0_offline_repair",
+        decision.get("R0_offline_repair_passed") is not True,
+        decision.get("preflight_authorized") is not False,
+        predecessor.get("immutable") is not True,
+        predecessor.get("terminal_decision") != "NOT_READY",
+        predecessor.get("special_fill_count") != 4,
+        predecessor.get("flatten_dispatches") != 2,
+        predecessor.get("special_flatten_sessions") != 2,
+        predecessor.get("special_flatten_session_slots") != [1, 4],
+        predecessor.get("maximum_special_flatten_sessions") != 2,
+        predecessor.get("successor_stops_above_limit") is not True,
+        predecessor.get("last_completed_position_open_orders") != "0/0",
+        predecessor.get("last_completed_reconciliation") is not True,
+        predecessor.get("terminal_account_authoritative") is not False,
+        predecessor.get("mutation_retries") != 0,
+        predecessor.get("resume_authorized") is not False,
+        predecessor.get("identity_reuse_authorized") is not False,
+        not summaries,
+        any(item.get("passed_gate") is not True or item.get("returncode") != 0
+            or item.get("network_attempts") != 0
+            or item.get("live_endpoint_attempts") != 0
+            or item.get("optuna_imported") is not False for item in summaries),
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(name) != 0 for name in (
+            "network_attempts", "credential_reads", "demo_endpoint_attempts",
+            "live_endpoint_attempts", "create_attempts", "amend_attempts",
+            "cancel_attempts", "flatten_attempts", "orders", "mutation_retries",
+        )),
+        secret.get("passed") is not True,
+    )):
+        raise ReadOnlyPreflightError("special-flatten classification evidence is invalid")
+    manifest = _read_json(completion_path)
+    if any(not _hash_matches(output / relative, expected)
+           for relative, expected in manifest.items()):
+        raise ReadOnlyPreflightError("special-flatten completion hash mismatch")
+    sources = _read_json(source_path)
+    if any(not _hash_matches(root / relative, expected)
+           for relative, expected in sources.items()):
+        raise ReadOnlyPreflightError("special-flatten source hash mismatch")
+    return {
+        "passed": True,
+        "evidence_kind": "r2_special_flatten_classification_r0_offline_repair",
+        "offline_run_id": evidence_id,
+        "repair_id": evidence_id,
+        "completion_files_checked": len(manifest),
+        "source_files_checked": len(sources),
+        "completion_hashes_sha256": _sha256(completion_path),
+        "terminal_sha256": _sha256(terminal_path),
+        "decision_sha256": _sha256(decision_path),
+        "failed_campaign_decision": "NOT_READY",
+        "terminal_account_authoritative": False,
+        "special_flatten_sessions": 2,
+        "resume_authorized": False,
+        "identity_reuse_authorized": False,
+    }
+
+
+def _verify_r2_bootstrap_exposure_admission_repair_evidence(
+    root: Path, evidence_id: str
+) -> dict[str, object]:
+    output = root / R2_BOOTSTRAP_EXPOSURE_ADMISSION_ARTIFACT_ROOT / evidence_id
+    terminal_path = output / "R0_R2_BOOTSTRAP_EXPOSURE_ADMISSION_REPAIR_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    predecessor_path = output / "predecessor/r2_admission_predecessor_audit.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    required = (terminal_path, decision_path, completion_path, source_path, predecessor_path, tests_path, endpoint_path, secret_path)
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("R2 bootstrap-exposure admission evidence is incomplete")
+    terminal, decision, predecessor, tests, endpoint, secret = (
+        _read_json(path)
+        for path in (terminal_path, decision_path, predecessor_path, tests_path, endpoint_path, secret_path)
+    )
+    summaries = list(tests.values())
+    if any((
+        terminal.get("status") != R2_BOOTSTRAP_EXPOSURE_ADMISSION_READY_STATUS,
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("evidence_kind") != "r2_bootstrap_exposure_admission_r0_offline_repair",
+        decision.get("R0_offline_repair_passed") is not True,
+        decision.get("preflight_authorized") is not False,
+        predecessor.get("r1_preflight_passed") is not True,
+        predecessor.get("r1_mutation_attempts") != 0,
+        predecessor.get("r1_live_endpoint_attempts") != 0,
+        predecessor.get("predecessor_evidence_kind") != "r1_preflight_bootstrap_exposure_admission_r0_offline_repair",
+        predecessor.get("failed_R1_identity_reusable") is not False,
+        not summaries,
+        any(item.get("passed_gate") is not True or item.get("returncode") != 0 or item.get("network_attempts") != 0 or item.get("live_endpoint_attempts") != 0 or item.get("optuna_imported") is not False for item in summaries),
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(name) != 0 for name in ("network_attempts", "credential_reads", "demo_endpoint_attempts", "live_endpoint_attempts", "create_attempts", "amend_attempts", "cancel_attempts", "flatten_attempts", "orders", "mutation_retries")),
+        secret.get("passed") is not True,
+    )):
+        raise ReadOnlyPreflightError("R2 bootstrap-exposure admission evidence is invalid")
+    manifest = _read_json(completion_path)
+    failures = [relative for relative, expected in manifest.items() if not _hash_matches(output / relative, expected)]
+    sources = _read_json(source_path)
+    source_failures = [relative for relative, expected in sources.items() if not _hash_matches(root / relative, expected)]
+    if failures or source_failures:
+        raise ReadOnlyPreflightError("R2 bootstrap-exposure admission hash mismatch")
+    return {
+        "passed": True,
+        "evidence_kind": "r2_bootstrap_exposure_admission_r0_offline_repair",
+        "offline_run_id": evidence_id,
+        "repair_id": evidence_id,
+        "completion_files_checked": len(manifest),
+        "source_files_checked": len(sources),
+        "completion_hashes_sha256": _sha256(completion_path),
+        "terminal_sha256": _sha256(terminal_path),
+        "decision_sha256": _sha256(decision_path),
+        "r1_preflight_passed": True,
+        "r1_mutation_attempts": 0,
+        "r1_live_endpoint_attempts": 0,
+        "failed_R1_identity_reusable": False,
+        "resume_authorized": False,
+    }
+
+
+def _verify_r1_bootstrap_exposure_admission_repair_evidence(
+    root: Path, evidence_id: str
+) -> dict[str, object]:
+    output = root / R1_BOOTSTRAP_EXPOSURE_ADMISSION_ARTIFACT_ROOT / evidence_id
+    terminal_path = output / "R0_R1_BOOTSTRAP_EXPOSURE_ADMISSION_REPAIR_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    predecessor_path = output / "predecessor/admission_predecessor_audit.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    required = (
+        terminal_path, decision_path, completion_path, source_path, predecessor_path,
+        tests_path, endpoint_path, secret_path,
+    )
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("R1 bootstrap-exposure admission evidence is incomplete")
+    terminal, decision, predecessor, tests, endpoint, secret = (
+        _read_json(path)
+        for path in (terminal_path, decision_path, predecessor_path, tests_path, endpoint_path, secret_path)
+    )
+    summaries = list(tests.values())
+    if any((
+        terminal.get("status") != R1_BOOTSTRAP_EXPOSURE_ADMISSION_READY_STATUS,
+        terminal.get("evidence_id") != evidence_id,
+        terminal.get("terminal_written_last") is not True,
+        decision.get("evidence_kind") != "r1_preflight_bootstrap_exposure_admission_r0_offline_repair",
+        decision.get("R0_offline_repair_passed") is not True,
+        decision.get("preflight_authorized") is not False,
+        predecessor.get("failed_preflight_decision") != "READ_ONLY_PREFLIGHT_FAILED",
+        predecessor.get("failure_reason") != "UNOWNED_DEMO_EXPOSURE",
+        predecessor.get("terminal_account_authoritative") is not False,
+        predecessor.get("rerun_authorized") is not False,
+        predecessor.get("resume_authorized") is not False,
+        not summaries,
+        any(
+            item.get("passed_gate") is not True
+            or item.get("returncode") != 0
+            or item.get("network_attempts") != 0
+            or item.get("live_endpoint_attempts") != 0
+            or item.get("optuna_imported") is not False
+            for item in summaries
+        ),
+        endpoint.get("socket_denied") is not True,
+        any(endpoint.get(name) != 0 for name in (
+            "network_attempts", "credential_reads", "demo_endpoint_attempts",
+            "live_endpoint_attempts", "create_attempts", "amend_attempts",
+            "cancel_attempts", "flatten_attempts", "orders", "mutation_retries",
+        )),
+        secret.get("passed") is not True,
+    )):
+        raise ReadOnlyPreflightError("R1 bootstrap-exposure admission evidence is invalid")
+    manifest = _read_json(completion_path)
+    failures = [
+        relative for relative, expected in manifest.items()
+        if not _hash_matches(output / relative, expected)
+    ]
+    sources = _read_json(source_path)
+    source_failures = [
+        relative for relative, expected in sources.items()
+        if not _hash_matches(root / relative, expected)
+    ]
+    if failures or source_failures:
+        raise ReadOnlyPreflightError("R1 bootstrap-exposure admission hash mismatch")
+    return {
+        "passed": True,
+        "evidence_kind": "r1_preflight_bootstrap_exposure_admission_r0_offline_repair",
+        "offline_run_id": evidence_id,
+        "repair_id": evidence_id,
+        "completion_files_checked": len(manifest),
+        "source_files_checked": len(sources),
+        "completion_hashes_sha256": _sha256(completion_path),
+        "terminal_sha256": _sha256(terminal_path),
+        "decision_sha256": _sha256(decision_path),
+        "failed_preflight_decision": "READ_ONLY_PREFLIGHT_FAILED",
+        "failure_reason": "UNOWNED_DEMO_EXPOSURE",
+        "terminal_account_authoritative": False,
+        "rerun_authorized": False,
+        "resume_authorized": False,
+    }
+
+
+def _verify_r1_network_transport_audit_evidence(root: Path, evidence_id: str) -> dict[str, object]:
+    output = root / "artifacts/okx_demo_r1_network_transport_audit" / evidence_id
+    terminal_path = output / "R0_R1_NETWORK_TRANSPORT_AUDIT_COMPLETED.json"
+    decision_path = output / "decision/offline_decision.json"
+    completion_path = output / "completion_hashes.json"
+    source_path = output / "specification/source_hashes.json"
+    tests_path = output / "tests/test_summary.json"
+    endpoint_path = output / "audits/endpoint_mutation_audit.json"
+    secret_path = output / "audits/secret_scan.json"
+    predecessor_path = output / "predecessor/failed_preflight_audit.json"
+    required = (terminal_path, decision_path, completion_path, source_path, tests_path,
+                endpoint_path, secret_path, predecessor_path)
+    if not all(path.is_file() for path in required):
+        raise ReadOnlyPreflightError("R1 network transport R0 audit is incomplete")
+    terminal = _read_json(terminal_path); decision = _read_json(decision_path)
+    tests = _read_json(tests_path); endpoint = _read_json(endpoint_path)
+    secret = _read_json(secret_path); predecessor = _read_json(predecessor_path)
+    manifest = _read_json(completion_path); sources = _read_json(source_path)
+    zero_keys = ("network_attempts", "credential_reads", "demo_endpoint_attempts", "live_endpoint_attempts",
+                 "create_attempts", "amend_attempts", "cancel_attempts", "flatten_attempts",
+                 "account_configuration_attempts", "orders", "mutation_retries")
+    if any((
+        terminal.get("status") != "OKX_DEMO_R1_NETWORK_TRANSPORT_AUDIT_R0_OFFLINE_SUPPORT",
+        terminal.get("evidence_id") != evidence_id, terminal.get("terminal_written_last") is not True,
+        decision.get("evidence_kind") != "r1_network_transport_audit_r0_offline",
+        decision.get("R0_offline_audit_passed") is not True, decision.get("preflight_authorized") is not False,
+        any(tests.get(name, {}).get("passed_gate") is not True or tests.get(name, {}).get("returncode") != 0
+            or tests.get(name, {}).get("network_attempts") != 0 or tests.get(name, {}).get("optuna_imported") is not False
+            for name in ("targeted", "root_non_optuna", "backtest_non_optuna")),
+        endpoint.get("socket_denied") is not True, any(endpoint.get(key) != 0 for key in zero_keys),
+        secret.get("passed") is not True, predecessor.get("immutable") is not True,
+        predecessor.get("failed_preflight_decision") != "READ_ONLY_PREFLIGHT_FAILED",
+        predecessor.get("failure_stage") != "PRE_MARKET_BOOTSTRAP",
+        predecessor.get("primary_error_category") != "NETWORK",
+        predecessor.get("terminal_account_authoritative") is not False,
+        predecessor.get("mutation_attempts") != 0, predecessor.get("rerun_authorized") is not False,
+        any(not isinstance(value, str) or _sha256(root / name) != value for name, value in sources.items()),
+        any(not isinstance(name, str) or not isinstance(value, str) or not (output / name).is_file()
+            or _sha256(output / name) != value for name, value in manifest.items()),
+    )):
+        raise ReadOnlyPreflightError("R1 network transport R0 audit mismatch")
+    return {"passed": True, "evidence_kind": "r1_network_transport_audit_r0_offline",
+            "offline_run_id": evidence_id, "repair_id": evidence_id,
+            "completion_files_checked": len(manifest),
+            "completion_hashes_sha256": _sha256(completion_path),
+            "terminal_sha256": _sha256(terminal_path), "decision_sha256": _sha256(decision_path),
+            "failed_preparation_id": predecessor.get("preparation_id"),
+            "failed_run_id": predecessor.get("run_id"), "failed_session_id": predecessor.get("session_id"),
+            "failed_preflight_decision": "READ_ONLY_PREFLIGHT_FAILED", "terminal_account_authoritative": False,
+            "rerun_authorized": False, "resume_authorized": False}
 
 
 def _snapshot_key(snapshot: Any, account_binding: str) -> str:
@@ -3717,6 +5057,15 @@ def _pre_market_terminal_account_pair(
 def _read_error_category(error: BaseException) -> str:
     """Return a stable, non-sensitive diagnostic category for read failures."""
     return str(_read_error_detail(error)["category"])
+
+
+def _clock_skew_diagnostic(error: BaseException) -> dict[str, int] | None:
+    """Persist only the measured skew and frozen bound, never timestamps."""
+    skew = getattr(error, "clock_skew_ms", None)
+    maximum = getattr(error, "maximum_clock_skew_ms", None)
+    if type(skew) is not int or type(maximum) is not int or skew < 0 or maximum <= 0:
+        return None
+    return {"clock_skew_ms": skew, "maximum_clock_skew_ms": maximum}
 
 
 def run_read_only_preflight(
@@ -3982,6 +5331,9 @@ def run_read_only_preflight(
             "live_endpoint_attempts": int(audit.get("live_endpoint_attempts", 0)),
             "live_orders": 0,
         }
+        clock_diagnostic = _clock_skew_diagnostic(exc)
+        if clock_diagnostic is not None:
+            result["clock_skew_diagnostic"] = clock_diagnostic
         diagnostic = _sanitized_account_only_diagnostic(adapter)
         if diagnostic is not None:
             result["account_only_diagnostic"] = diagnostic

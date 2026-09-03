@@ -37,6 +37,16 @@ CAMPAIGN_ARTIFACT_ROOT = (
 SESSION_ARTIFACT_ROOT = Path("artifacts") / "okx_demo_soak_validation"
 READY_STATUS = "A2_MULTI_SESSION_ECONOMIC_PACKAGE_FROZEN_OFFLINE"
 SESSION_READY_STATUS = "BOUNDED_DEMO_SOAK_PACKAGE_FROZEN_OFFLINE"
+R2_ADMISSIBLE_R0_EVIDENCE_KINDS = frozenset({
+    "multi_session_a0_offline_build",
+    "r2_terminal_workoff_v2_r0_offline_repair",
+    "r2_session5_clock_skew_interruption_audit_r0_offline",
+    "r1_network_transport_audit_r0_offline",
+    "r1_clock_skew_r0_offline_repair",
+    "r2_bootstrap_exposure_admission_r0_offline_repair",
+    "r2_special_flatten_classification_r0_offline_repair",
+    "r1_special_flatten_admission_r0_offline_repair",
+})
 FORMAL_PACKAGE_ID = "formal-package-20260810T123953Z"
 FORMAL_COMPLETED_SHA256 = (
     "f62a17a606b7c4826f862ee6ae0cab7ef35d224c9f08bfc13234aa188f12b11e"
@@ -169,8 +179,8 @@ def _verify_a1(
         audit.get("passed") is not True,
         audit.get("run_id") != preflight_run_id,
         spec.get("protocol_id") != MULTI_SESSION_A1_PREFLIGHT_PROTOCOL_ID,
-        predecessor.get("evidence_kind") != "multi_session_a0_offline_build",
-        predecessor.get("evidence_id") != a0_evidence_id,
+        predecessor.get("evidence_kind") not in R2_ADMISSIBLE_R0_EVIDENCE_KINDS,
+        _predecessor_r0_evidence_id(predecessor) != a0_evidence_id,
         hosts != ["www.okx.com"],
         result.get("mutation_attempts") != 0,
         result.get("orders_submitted") != 0,
@@ -189,6 +199,82 @@ def _verify_a1(
     }
 
 
+def _predecessor_r0_evidence_id(predecessor: dict[str, object]) -> object:
+    """Resolve the sole canonical predecessor identity for an admitted kind."""
+    if predecessor.get("evidence_kind") == "multi_session_a0_offline_build":
+        return predecessor.get("evidence_id")
+    if predecessor.get("evidence_kind") in {
+        "r2_terminal_workoff_v2_r0_offline_repair",
+        "r2_session5_clock_skew_interruption_audit_r0_offline",
+        "r1_clock_skew_r0_offline_repair",
+        "r2_bootstrap_exposure_admission_r0_offline_repair",
+        "r2_special_flatten_classification_r0_offline_repair",
+        "r1_special_flatten_admission_r0_offline_repair",
+    }:
+        return predecessor.get("offline_run_id")
+    return None
+
+
+def _admissible_r0_for_r2(a0: dict[str, object]) -> bool:
+    """Accept only source-specific R0 evidence with its matching fail-closed gate."""
+    if a0.get("passed") is not True:
+        return False
+    evidence_kind = a0.get("evidence_kind")
+    if evidence_kind == "multi_session_a0_offline_build":
+        return all((
+            a0.get("formal_predecessor_verified") is True,
+            a0.get("soak_predecessor_verified") is True,
+            a0.get("failed_a2_predecessor_verified") is True,
+        ))
+    if evidence_kind == "r2_terminal_workoff_v2_r0_offline_repair":
+        return all((
+            a0.get("failed_campaign_decision") == "NOT_READY",
+            a0.get("terminal_account_authoritative") is True,
+            a0.get("resume_authorized") is False,
+        ))
+    if evidence_kind == "r2_session5_clock_skew_interruption_audit_r0_offline":
+        return all((
+            a0.get("failed_campaign_decision") == "NOT_READY",
+            a0.get("terminal_account_authoritative") is True,
+            a0.get("resume_authorized") is False,
+            a0.get("accept_authorized") is False,
+            a0.get("failed_session_slot") == 5,
+        ))
+    if evidence_kind == "r1_clock_skew_r0_offline_repair":
+        return all((
+            a0.get("failed_campaign_decision") == "NOT_READY",
+            a0.get("terminal_account_authoritative") is False,
+            a0.get("resume_authorized") is False,
+            isinstance(a0.get("failed_preparation_id"), str),
+            isinstance(a0.get("failed_run_id"), str),
+            isinstance(a0.get("failed_session_id"), str),
+        ))
+    if evidence_kind == "r2_bootstrap_exposure_admission_r0_offline_repair":
+        return all((
+            a0.get("r1_preflight_passed") is True,
+            a0.get("r1_mutation_attempts") == 0,
+            a0.get("r1_live_endpoint_attempts") == 0,
+            a0.get("failed_R1_identity_reusable") is False,
+            a0.get("resume_authorized") is False,
+        ))
+    if evidence_kind == "r2_special_flatten_classification_r0_offline_repair":
+        return all((
+            a0.get("failed_campaign_decision") == "NOT_READY",
+            a0.get("terminal_account_authoritative") is False,
+            a0.get("special_flatten_sessions") == 2,
+            a0.get("resume_authorized") is False,
+            a0.get("identity_reuse_authorized") is False,
+        ))
+    if evidence_kind == "r1_special_flatten_admission_r0_offline_repair":
+        return all((
+            a0.get("failed_preflight_decision") == "READ_ONLY_PREFLIGHT_FAILED",
+            a0.get("failed_identity_reusable") is False,
+            a0.get("rerun_authorized") is False,
+            a0.get("resume_authorized") is False,
+        ))
+    return False
+
+
 def _risk_budget() -> dict[str, object]:
     return {
         "capital_usdt": "750",
@@ -204,13 +290,15 @@ def _risk_budget() -> dict[str, object]:
         "session_normal_create_cap": 60,
         "admission_create_cap": 48,
         "maker_workoff_create_reserve": 12,
-        "economic_repair_version": "r0-sample-efficiency-v1",
+        "economic_repair_version": "r0-terminal-workoff-v2",
         "maker_fee_rate": "0.0002",
         "minimum_half_spread_bps": "4.0",
         "fee_edge_safety_buffer_usdt": "0.01",
         "quote_retention_threshold_ticks": 2,
         "balanced_quote_retention_threshold_ticks": 10,
         "defense_quote_retention_threshold_ticks": 20,
+        "draining_workoff_max_quote_observations": 6,
+        "draining_workoff_max_refreshes": 3,
         "minimum_fill_balance": "0.60",
         "observation_interval_ms": 2_000,
         "maximum_market_age_ms": 1_000,
@@ -330,13 +418,7 @@ def prepare(
             preflight_run_id=preflight_run_id,
             a0_evidence_id=a0_evidence_id,
         )
-        if any((
-            a0.get("passed") is not True,
-            a0.get("evidence_kind") != "multi_session_a0_offline_build",
-            a0.get("formal_predecessor_verified") is not True,
-            a0.get("soak_predecessor_verified") is not True,
-            a0.get("failed_a2_predecessor_verified") is not True,
-        )):
+        if not _admissible_r0_for_r2(a0):
             raise A2PackageError("A0 evidence is not eligible for A2")
         sources = _source_hashes(root)
         source_manifest_sha256 = canonical_sha256(sources)

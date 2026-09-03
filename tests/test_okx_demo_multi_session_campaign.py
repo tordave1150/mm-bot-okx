@@ -79,6 +79,7 @@ def _session_payload(
     normal_fees: str = "0.10",
     special_gross: str = "0",
     special_fees: str = "0",
+    special_fill_count: int | None = None,
     flatten_dispatches: int = 0,
     unclassified: int = 0,
     hard_kill: bool = False,
@@ -143,7 +144,10 @@ def _session_payload(
         "normal_gross_pnl_usdt": str(gross),
         "normal_fees_usdt": str(fees),
         "normal_net_pnl_usdt": str(normal_net),
-        "special_fill_count": int(flatten_dispatches > 0),
+        "special_fill_count": (
+            int(flatten_dispatches > 0)
+            if special_fill_count is None else special_fill_count
+        ),
         "special_gross_pnl_usdt": str(special_gross_value),
         "special_fees_usdt": str(special_fees_value),
         "special_net_pnl_usdt": str(special_net),
@@ -294,6 +298,41 @@ def test_special_flatten_rate_uses_session_count_not_special_pnl(tmp_path: Path)
     assert decision is CampaignDecision.NOT_READY
     assert "SPECIAL_FLATTEN_RATE" in registry.records()[-1]["payload"]["reasons"]
     assert registry.aggregate()["normal_net_pnl_usdt"] == "2.40"
+
+
+def test_special_flatten_rate_counts_dispatch_sessions_not_special_fills(
+    tmp_path: Path,
+) -> None:
+    """One dispatch may settle through several special trades.
+
+    The campaign has two such sessions (1 and 4), even though its special
+    trade-level fill count is four.  The exact 2/12 limit remains admissible;
+    a third dispatch session remains fail-closed at terminal evaluation.
+    """
+    registry = CampaignRegistry.initialize(tmp_path / "two", _manifest())
+    for index in range(12):
+        decision = registry.register_session(_session(
+            index,
+            flatten_dispatches=1 if index in (0, 3) else 0,
+            special_fill_count=1 if index == 0 else (3 if index == 3 else 0),
+            special_gross="-0.10" if index in (0, 3) else "0",
+            special_fees="0.01" if index in (0, 3) else "0",
+        ))
+    assert decision is CampaignDecision.READY_FOR_PRODUCTION_READ_ONLY_SHADOW
+    aggregate = registry.aggregate()
+    assert aggregate["special_flatten_sessions"] == 2
+    assert aggregate["special_flatten_fraction"] == str(Decimal(2) / Decimal(12))
+    assert aggregate["special_fees_usdt"] == "0.02"
+
+    capped = CampaignRegistry.initialize(tmp_path / "three", _manifest())
+    for index in range(12):
+        decision = capped.register_session(_session(
+            index,
+            flatten_dispatches=1 if index in (0, 3, 7) else 0,
+            special_fill_count=1 if index != 3 else 3,
+        ))
+    assert decision is CampaignDecision.NOT_READY
+    assert "SPECIAL_FLATTEN_RATE" in capped.records()[-1]["payload"]["reasons"]
 
 
 def test_hard_kill_and_aggregate_loss_fail_closed_early(tmp_path: Path) -> None:

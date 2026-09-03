@@ -1009,6 +1009,8 @@ def test_successor_executor_seals_bounded_sample_efficiency_policy(
     assert policy["balanced_retention_threshold_ticks"] == 10
     assert policy["defense_retention_threshold_ticks"] == 20
     assert policy["draining_workoff_retention_threshold_ticks"] == 5
+    assert policy["draining_workoff_max_quote_observations"] == 6
+    assert policy["draining_workoff_max_refreshes"] == 3
     assert policy["total_create_cap"] == 60
     assert policy["risk_expansion"] is False
     assert evidence["unclassified_quote_mode_ticks"] == 0
