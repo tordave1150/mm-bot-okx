@@ -137,7 +137,14 @@ class DemoStateStore:
                 handle.write("\n")
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temporary, self.path)
+            for attempt in range(5):
+                try:
+                    os.replace(temporary, self.path)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.01)
         except Exception as exc:
             try:
                 temporary.unlink(missing_ok=True)

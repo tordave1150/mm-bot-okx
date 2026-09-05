@@ -1,2 +1,0 @@
-{"payload":{"event":"one"},"payload_sha256":"a8a04cce44ef91349ac80f3a6fd2bf6e0b1bdb24b78c5c9568a1165a98ca8469","previous_hash":"","record_hash":"b8d1d84089592ea556b7d90f9b8b5fe9a7a161744cdbf9ff18e88d28b088689c","sequence":1}
-{"payload":{"event":"two"},"payload_sha256":"8f98291fdff5e9a34eb2033a1e537d5b867bf66ac84f2aa50c4d7c6b1c8f43ee","previous_hash":"b8d1d84089592ea556b7d90f9b8b5fe9a7a161744cdbf9ff18e88d28b088689c","record_hash":"364acf3a64bdc2c0a58546c7bb8ea448b79d3f250f435e643eef2803ba2268f2","sequence":2}

@@ -158,6 +158,54 @@ class OkxDemoAdapter:
         self.last_new_trades: tuple[dict[str, Any], ...] = ()
         self.market_metadata_quarantine: tuple[dict[str, Any], ...] = ()
         self.last_account_only_diagnostic: dict[str, object] | None = None
+        self.dispatched_order_ids: set[str] = set()
+        self.dispatched_client_order_ids: set[str] = set()
+        self.session_owned_fills: list[dict[str, Any]] = []
+        self.foreign_fills_observed: list[dict[str, Any]] = []
+        self.session_fifo_round_trips: int = 0
+        self.session_owned_realized_pnl: Decimal = Decimal("0.0")
+        self.session_owned_fees_usdt: Decimal = Decimal("0.0")
+
+    @property
+    def session_maker_bid_fills(self) -> int:
+        return sum(
+            1 for fill in self.session_owned_fills
+            if fill.get("side") == "buy" and (
+                fill.get("takerOrMaker") == "maker"
+                or (fill.get("info") or {}).get("execType") in {"M", "maker"}
+            )
+        )
+
+    @property
+    def session_maker_ask_fills(self) -> int:
+        return sum(
+            1 for fill in self.session_owned_fills
+            if fill.get("side") == "sell" and (
+                fill.get("takerOrMaker") == "maker"
+                or (fill.get("info") or {}).get("execType") in {"M", "maker"}
+            )
+        )
+
+    @property
+    def session_maker_fills_total(self) -> int:
+        return self.session_maker_bid_fills + self.session_maker_ask_fills
+
+    @property
+    def session_taker_fills_total(self) -> int:
+        return sum(
+            1 for fill in self.session_owned_fills
+            if fill.get("takerOrMaker") == "taker"
+            or (fill.get("info") or {}).get("execType") in {"T", "taker"}
+        )
+
+    @property
+    def session_filled_btc_quantity(self) -> float:
+        if self.market_spec is None:
+            return 0.0
+        total_contracts = sum(
+            Decimal(str(fill.get("amount") or 0)) for fill in self.session_owned_fills
+        )
+        return float(self.market_spec.contracts_to_base(total_contracts))
 
     def _halt(self, reason: str) -> None:
         self.halted_reason = reason
@@ -427,6 +475,11 @@ class OkxDemoAdapter:
                 raise DemoAdapterError("prior session has unresolved state")
             restored.session_id = self.session_id
             restored.client_order_generation = 0
+        if restored.owned_open_orders:
+            for cid, rec in restored.owned_open_orders.items():
+                self.dispatched_client_order_ids.add(cid)
+                if rec.get("order_id"):
+                    self.dispatched_order_ids.add(str(rec["order_id"]))
         self.state = restored
 
     @staticmethod
@@ -446,7 +499,21 @@ class OkxDemoAdapter:
         self.last_new_trade_count = len(new_trades)
         self.last_new_trades = tuple(new_trades)
         for trade in new_trades:
-            self._apply_trade_accounting(trade)
+            order_id = str(trade.get("order") or "")
+            client_id = self._client_id(trade)
+            is_owned = (
+                (order_id and order_id in self.dispatched_order_ids)
+                or (client_id and client_id in self.dispatched_client_order_ids)
+                or (client_id and client_id in expected)
+                or (order_id and any(row.get("order_id") == order_id for row in self.state.owned_open_orders.values()))
+                or (order_id and self.state.flatten_order_id == order_id)
+                or (client_id and self.state.flatten_client_order_id == client_id)
+            )
+            self._apply_trade_accounting(trade, is_owned=is_owned)
+            if is_owned:
+                self.session_owned_fills.append(trade)
+            else:
+                self.foreign_fills_observed.append(trade)
         live_by_client = {self._client_id(order): order for order in snapshot.open_orders}
         foreign = [
             str(order.get("id") or "unknown")
@@ -500,7 +567,7 @@ class OkxDemoAdapter:
         )
         self.state_store.save(self.state)
 
-    def _apply_trade_accounting(self, trade: dict[str, Any]) -> None:
+    def _apply_trade_accounting(self, trade: dict[str, Any], *, is_owned: bool = True) -> None:
         if self.state is None or self.market_spec is None:
             raise DemoAdapterError("runtime state is unavailable")
         side = str(trade.get("side") or "")
@@ -526,6 +593,10 @@ class OkxDemoAdapter:
             realized = closed * (price - average) * (
                 Decimal("1") if current > 0 else Decimal("-1")
             )
+            if is_owned and self.profile and hasattr(self.profile, "strategy") and self.profile.strategy:
+                lot_size = Decimal(str(self.profile.strategy.fixed_lot_size_btc))
+                if lot_size > 0 and closed >= lot_size:
+                    self.session_fifo_round_trips += int(closed / lot_size)
             if resulting == 0:
                 new_average = Decimal("0")
             elif current * resulting > 0:
@@ -543,11 +614,14 @@ class OkxDemoAdapter:
             raise DemoAdapterError("unsupported trade fee currency")
         self.state.inventory_btc = float(resulting)
         self.state.average_entry_price = float(new_average)
-        self.state.gross_realized_pnl_usdt += float(realized)
-        self.state.total_fees_usdt += float(fee_usdt)
-        self.state.net_realized_pnl_usdt = (
-            self.state.gross_realized_pnl_usdt - self.state.total_fees_usdt
-        )
+        if is_owned:
+            self.session_owned_realized_pnl += realized
+            self.session_owned_fees_usdt += fee_usdt
+            self.state.gross_realized_pnl_usdt += float(realized)
+            self.state.total_fees_usdt += float(fee_usdt)
+            self.state.net_realized_pnl_usdt = (
+                self.state.gross_realized_pnl_usdt - self.state.total_fees_usdt
+            )
 
     def configure_and_verify_account_mode(self) -> None:
         """Set demo-only net mode/leverage, then prove the resulting state."""
@@ -752,6 +826,8 @@ class OkxDemoAdapter:
                     "state failure left order outcome ambiguous"
                 ) from cancel_exc
             raise
+        self.dispatched_order_ids.add(order_id)
+        self.dispatched_client_order_ids.add(client_id)
         return SubmittedOrder(
             order_id, client_id, side, price, float(contracts), False, True
         )
@@ -871,6 +947,8 @@ class OkxDemoAdapter:
             raise AmbiguousExchangeState("flatten acknowledgement identity mismatch")
         self.state.flatten_order_id = order_id
         self.state_store.save(self.state)
+        self.dispatched_order_ids.add(order_id)
+        self.dispatched_client_order_ids.add(client_id)
         return SubmittedOrder(
             order_id, client_id, side, reference_price, float(contracts), True, False
         )

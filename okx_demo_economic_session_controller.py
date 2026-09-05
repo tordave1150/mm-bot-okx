@@ -32,6 +32,18 @@ class SessionPhase(str, Enum):
     TERMINAL = "TERMINAL"
 
 
+class WorkOffStage(str, Enum):
+    NORMAL_MAKING = "NORMAL_MAKING"
+    PASSIVE_WORK_OFF = "PASSIVE_WORK_OFF"
+    AGGRESSIVE_MAKER_WORK_OFF = "AGGRESSIVE_MAKER_WORK_OFF"
+    EMERGENCY_FLATTEN = "EMERGENCY_FLATTEN"
+
+
+class FlattenReason(str, Enum):
+    ROUTINE_TERMINAL_CLEANUP = "ROUTINE_TERMINAL_CLEANUP"
+    RISK_EMERGENCY_FLATTEN = "RISK_EMERGENCY_FLATTEN"
+
+
 @dataclass(frozen=True)
 class FeeAwareQuoteDecision:
     bid_price_usdt: Decimal
@@ -392,6 +404,15 @@ class EconomicSessionController:
     placement_reason_counters: dict[str, int] = field(default_factory=dict)
     normal_bid_fill_quantity_btc: Decimal = Decimal("0")
     normal_ask_fill_quantity_btc: Decimal = Decimal("0")
+    current_workoff_stage: WorkOffStage = WorkOffStage.NORMAL_MAKING
+    workoff_stage_counters: dict[str, int] = field(default_factory=lambda: {
+        stage.value: 0 for stage in WorkOffStage
+    })
+    flatten_reason: str | None = None
+    terminal_inventory_before_cleanup_btc: Decimal = Decimal("0")
+    workoff_episodes: list[dict[str, object]] = field(default_factory=list)
+    current_episode_start_ms: int = 0
+    current_episode_initial_inventory_btc: Decimal = Decimal("0")
 
     def __post_init__(self) -> None:
         if not self.session_id or len(self.source_sha256) != 64:
@@ -413,6 +434,8 @@ class EconomicSessionController:
             self.normal_ask_fill_quantity_btc,
         )):
             raise CampaignError("fill quantity counter regression")
+        if set(self.workoff_stage_counters) != {stage.value for stage in WorkOffStage}:
+            self.workoff_stage_counters = {stage.value: 0 for stage in WorkOffStage}
 
     def enter_draining(
         self, *, timestamp_ms: int, normal_creates: int,
@@ -526,10 +549,25 @@ class EconomicSessionController:
             mode = QuoteMode.BALANCED_TWO_SIDED
         self.quote_mode_ticks += 1
         self.quote_mode_counters[mode.value] += 1
+
+        if hard_kill:
+            stage = WorkOffStage.EMERGENCY_FLATTEN
+        elif inventory == 0:
+            stage = WorkOffStage.NORMAL_MAKING
+        elif self.phase is SessionPhase.DRAINING:
+            stage = WorkOffStage.AGGRESSIVE_MAKER_WORK_OFF
+        else:
+            stage = WorkOffStage.PASSIVE_WORK_OFF
+        self.current_workoff_stage = stage
+        self.workoff_stage_counters[stage.value] = (
+            self.workoff_stage_counters.get(stage.value, 0) + 1
+        )
+
         self._record(
             "QUOTE_MODE_CLASSIFIED",
             timestamp_ms,
             quote_mode=mode.value,
+            workoff_stage=stage.value,
             inventory_btc=str(inventory),
             hard_kill=hard_kill,
             unresolved_intent=unresolved_intent,
@@ -622,6 +660,18 @@ class EconomicSessionController:
             workoff_order_ids=([fill_order_id] if workoff_quantity > 0 else []),
         )
         self.pending_fills[trade_id] = item
+        if before == Decimal("0") and after != Decimal("0"):
+            self.current_episode_start_ms = timestamp_ms
+            self.current_episode_initial_inventory_btc = after
+        elif before != Decimal("0") and after == Decimal("0"):
+            if self.current_episode_start_ms > 0:
+                duration_ms = max(timestamp_ms - self.current_episode_start_ms, 0)
+                self.workoff_episodes.append({
+                    "duration_ms": duration_ms,
+                    "resolved_by_maker": True,
+                    "initial_inventory_btc": str(self.current_episode_initial_inventory_btc),
+                })
+                self.current_episode_start_ms = 0
         self._record(
             "NORMAL_MAKER_FILL_OBSERVED",
             record_timestamp,
@@ -841,12 +891,23 @@ class EconomicSessionController:
         )
 
     def authorize_taker_flatten(self, *, reason: str, timestamp_ms: int) -> None:
-        if reason not in {"SHUTDOWN", "EMERGENCY_HARD_KILL"}:
+        canonical_reasons = {
+            "ROUTINE_TERMINAL_CLEANUP": FlattenReason.ROUTINE_TERMINAL_CLEANUP.value,
+            "SHUTDOWN": FlattenReason.ROUTINE_TERMINAL_CLEANUP.value,
+            "RISK_EMERGENCY_FLATTEN": FlattenReason.RISK_EMERGENCY_FLATTEN.value,
+            "EMERGENCY_HARD_KILL": FlattenReason.RISK_EMERGENCY_FLATTEN.value,
+        }
+        if reason not in canonical_reasons:
             raise CampaignError("taker flatten is not authorized for normal economics")
+        normalized_reason = canonical_reasons[reason]
+        self.flatten_reason = normalized_reason
+        self.current_workoff_stage = WorkOffStage.EMERGENCY_FLATTEN
         self._record(
             "SPECIAL_TAKER_FLATTEN_AUTHORIZED",
             timestamp_ms,
-            reason=reason,
+            reason=normalized_reason,
+            requested_reason=reason,
+            workoff_stage=WorkOffStage.EMERGENCY_FLATTEN.value,
             normal_economic_evidence=False,
         )
 
@@ -862,6 +923,15 @@ class EconomicSessionController:
         quantity = _decimal(flatten_quantity_btc, "special closure quantity")
         if inventory == 0 or quantity != abs(inventory) or quantity > Decimal("0.01"):
             raise CampaignError("special closure does not match terminal inventory")
+        self.terminal_inventory_before_cleanup_btc = abs(inventory)
+        if self.current_episode_start_ms > 0:
+            duration_ms = max(timestamp_ms - self.current_episode_start_ms, 0)
+            self.workoff_episodes.append({
+                "duration_ms": duration_ms,
+                "resolved_by_maker": False,
+                "initial_inventory_btc": str(self.current_episode_initial_inventory_btc),
+            })
+            self.current_episode_start_ms = 0
         candidates = [
             item
             for item in (*self.pending_fills.values(), *self.completed_fills.values())
@@ -957,6 +1027,13 @@ class EconomicSessionController:
             "quote_mode_ticks": self.quote_mode_ticks,
             "quote_mode_counters": dict(sorted(self.quote_mode_counters.items())),
             "unclassified_quote_mode_ticks": self.unclassified_quote_mode_ticks,
+            "workoff_stage": self.current_workoff_stage.value,
+            "workoff_stage_counters": dict(sorted(self.workoff_stage_counters.items())),
+            "flatten_reason": self.flatten_reason,
+            "terminal_inventory_before_cleanup_btc": str(
+                self.terminal_inventory_before_cleanup_btc
+            ),
+            "workoff_episodes": list(self.workoff_episodes),
             "causal_reentry": [item.to_dict() for item in causal],
             "markouts_usdt": [
                 str(self.markouts_usdt[item.trade_id])
@@ -1011,6 +1088,17 @@ class EconomicSessionController:
             "quote_mode_counters": dict(sorted(self.quote_mode_counters.items())),
             "quote_mode_ticks": self.quote_mode_ticks,
             "unclassified_quote_mode_ticks": self.unclassified_quote_mode_ticks,
+            "current_workoff_stage": self.current_workoff_stage.value,
+            "workoff_stage_counters": dict(sorted(self.workoff_stage_counters.items())),
+            "flatten_reason": self.flatten_reason,
+            "terminal_inventory_before_cleanup_btc": str(
+                self.terminal_inventory_before_cleanup_btc
+            ),
+            "workoff_episodes": list(self.workoff_episodes),
+            "current_episode_start_ms": self.current_episode_start_ms,
+            "current_episode_initial_inventory_btc": str(
+                self.current_episode_initial_inventory_btc
+            ),
             "pending_fills": {
                 key: value.to_dict() for key, value in sorted(self.pending_fills.items())
             },
@@ -1118,6 +1206,30 @@ class EconomicSessionController:
             normal_ask_fill_quantity_btc=_decimal(
                 raw.get("normal_ask_fill_quantity_btc", "0"),
                 "normal_ask_fill_quantity_btc",
+            ),
+            current_workoff_stage=WorkOffStage(
+                str(raw.get("current_workoff_stage", WorkOffStage.NORMAL_MAKING.value))
+            ),
+            workoff_stage_counters={
+                str(key): int(item)
+                for key, item in dict(
+                    raw.get("workoff_stage_counters", {})
+                ).items()
+            } if "workoff_stage_counters" in raw else {stage.value: 0 for stage in WorkOffStage},
+            flatten_reason=(
+                str(raw["flatten_reason"])
+                if raw.get("flatten_reason") is not None
+                else None
+            ),
+            terminal_inventory_before_cleanup_btc=_decimal(
+                raw.get("terminal_inventory_before_cleanup_btc", "0"),
+                "terminal_inventory_before_cleanup_btc",
+            ),
+            workoff_episodes=list(raw.get("workoff_episodes", [])),
+            current_episode_start_ms=int(raw.get("current_episode_start_ms", 0)),
+            current_episode_initial_inventory_btc=_decimal(
+                raw.get("current_episode_initial_inventory_btc", "0"),
+                "current_episode_initial_inventory_btc",
             ),
         )
         if result.schema_version != 2:

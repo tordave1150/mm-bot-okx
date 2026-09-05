@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import statistics
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from enum import Enum
@@ -33,6 +34,31 @@ class CampaignDecision(str, Enum):
     NOT_READY = "NOT_READY"
 
 
+class SafetyDecision(str, Enum):
+    SAFETY_PASS = "SAFETY_PASS"
+    SAFETY_FAIL = "SAFETY_FAIL"
+
+
+class EconomicHealth(str, Enum):
+    HEALTHY = "HEALTHY"
+    DEGRADED = "DEGRADED"
+    UNHEALTHY = "UNHEALTHY"
+
+
+class EvidenceSufficiency(str, Enum):
+    SUFFICIENT_EVIDENCE = "SUFFICIENT_EVIDENCE"
+    MORE_EVIDENCE_REQUIRED = "MORE_EVIDENCE_REQUIRED"
+
+
+class OverallOfflineState(str, Enum):
+    UNSAFE = "UNSAFE"
+    SAFE_OFFLINE = "SAFE_OFFLINE"
+    ECONOMICALLY_PROMISING = "ECONOMICALLY_PROMISING"
+    OFFLINE_QUALIFICATION_CANDIDATE = "OFFLINE_QUALIFICATION_CANDIDATE"
+    OFFLINE_QUALIFICATION_PASSED = "OFFLINE_QUALIFICATION_PASSED"
+    MORE_EVIDENCE_REQUIRED = "MORE_EVIDENCE_REQUIRED"
+
+
 CREATE_COUNTER_EXTENSION_FIELDS = frozenset({
     "normal_create_dispatches",
     "normal_create_acknowledgements",
@@ -44,8 +70,15 @@ TERMINAL_SPECIAL_CLOSURE_EXTENSION_FIELDS = frozenset({
     "special_closed_causal_fills",
     "special_closed_markouts_usdt",
 })
+WORKOFF_EXTENSION_FIELDS = frozenset({
+    "workoff_episodes",
+    "terminal_inventory_before_cleanup_btc",
+    "flatten_reason",
+})
 SESSION_EXTENSION_FIELDS = (
-    CREATE_COUNTER_EXTENSION_FIELDS | TERMINAL_SPECIAL_CLOSURE_EXTENSION_FIELDS
+    CREATE_COUNTER_EXTENSION_FIELDS
+    | TERMINAL_SPECIAL_CLOSURE_EXTENSION_FIELDS
+    | WORKOFF_EXTENSION_FIELDS
 )
 
 
@@ -1400,6 +1433,117 @@ class CampaignRegistry:
                 Decimal(sum(item.has_special_flatten_dispatch for item in rows))
                 / Decimal(max(len(rows), 1))
             ),
+            "flatten_session_rate": str(
+                Decimal(sum(item.has_special_flatten_dispatch for item in rows))
+                / Decimal(max(len(rows), 1))
+            ),
+            "flatten_cost_ratio": (
+                str(
+                    abs(
+                        sum(
+                            (item.special_net_pnl_usdt for item in rows),
+                            Decimal("0"),
+                        )
+                    )
+                    / sum(
+                        (item.normal_net_pnl_usdt for item in rows),
+                        Decimal("0"),
+                    )
+                )
+                if sum(
+                    (item.normal_net_pnl_usdt for item in rows), Decimal("0")
+                )
+                > Decimal("0")
+                else None
+            ),
+            "routine_cleanup_count": sum(
+                1
+                for item in rows
+                if item.has_special_flatten_dispatch and not item.hard_kill_triggered
+            ),
+            "emergency_flatten_count": sum(
+                1
+                for item in rows
+                if item.has_special_flatten_dispatch and item.hard_kill_triggered
+            ),
+            "terminal_inventory_mean_btc": str(
+                sum(
+                    (
+                        abs(
+                            Decimal(
+                                str(
+                                    item.extension_fields.get(
+                                        "terminal_inventory_before_cleanup_btc",
+                                        item.final_position_btc,
+                                    )
+                                )
+                            )
+                        )
+                        for item in rows
+                    ),
+                    Decimal("0"),
+                )
+                / Decimal(max(len(rows), 1))
+            ),
+            "terminal_inventory_max_btc": str(
+                max(
+                    (
+                        abs(
+                            Decimal(
+                                str(
+                                    item.extension_fields.get(
+                                        "terminal_inventory_before_cleanup_btc",
+                                        item.final_position_btc,
+                                    )
+                                )
+                            )
+                        )
+                        for item in rows
+                    ),
+                    default=Decimal("0"),
+                )
+            ),
+            "maker_workoff_success_rate": (
+                str(
+                    Decimal(
+                        sum(
+                            1
+                            for item in rows
+                            for ep in (
+                                item.extension_fields.get("workoff_episodes")
+                                if isinstance(
+                                    item.extension_fields.get("workoff_episodes"),
+                                    list,
+                                )
+                                else []
+                            )
+                            if ep.get("resolved_by_maker")
+                        )
+                    )
+                    / Decimal(
+                        max(
+                            sum(
+                                len(
+                                    item.extension_fields.get("workoff_episodes")
+                                    if isinstance(
+                                        item.extension_fields.get(
+                                            "workoff_episodes"
+                                        ),
+                                        list,
+                                    )
+                                    else []
+                                )
+                                for item in rows
+                            ),
+                            1,
+                        )
+                    )
+                )
+                if any(
+                    item.extension_fields.get("workoff_episodes") for item in rows
+                )
+                else None
+            ),
             "maximum_session_drawdown_usdt": str(max(
                 (item.maximum_drawdown_usdt for item in rows), default=Decimal("0")
             )),
@@ -1421,6 +1565,125 @@ class CampaignRegistry:
             "unsafe_sessions": sum(not item.is_safe for item in rows),
             "live_endpoint_attempts": sum(item.live_endpoint_attempts for item in rows),
             "live_orders": sum(item.live_orders for item in rows),
+        }
+
+    def evaluate_staged(
+        self, sessions: Iterable[SessionEvidence] | None = None
+    ) -> dict[str, object]:
+        rows = tuple(self.sessions() if sessions is None else sessions)
+        aggregate = self.aggregate(rows)
+        limits = self.manifest.limits
+
+        # 1. Hard Safety Gate
+        unsafe_reasons: list[str] = []
+        if any(not item.is_safe for item in rows):
+            unsafe_reasons.append("UNSAFE_SESSION")
+        if _decimal(aggregate["aggregate_net_pnl_usdt"], "aggregate_net") <= -limits.aggregate_hard_loss_usdt:
+            unsafe_reasons.append("AGGREGATE_HARD_LOSS")
+        if int(aggregate["campaign_wall_ms"]) > limits.maximum_campaign_wall_ms:
+            unsafe_reasons.append("CAMPAIGN_WALL_BUDGET")
+        if int(aggregate["normal_creates"]) > limits.maximum_campaign_normal_creates:
+            unsafe_reasons.append("CAMPAIGN_CREATE_BUDGET")
+        if len(rows) > limits.maximum_sessions:
+            unsafe_reasons.append("CAMPAIGN_SESSION_BUDGET")
+        if int(aggregate["unclassified_quote_mode_ticks"]) != 0:
+            unsafe_reasons.append("UNCLASSIFIED_QUOTE_MODE")
+        if not aggregate["normal_markout_attribution_reconciles"]:
+            unsafe_reasons.append("CAUSAL_REENTRY_RECONCILIATION")
+        if int(aggregate["live_endpoint_attempts"]) != 0 or int(aggregate["live_orders"]) != 0:
+            unsafe_reasons.append("LIVE_MUTATION_BREACH")
+
+        safety_pass = len(unsafe_reasons) == 0
+        safety_decision = (
+            SafetyDecision.SAFETY_PASS if safety_pass else SafetyDecision.SAFETY_FAIL
+        )
+
+        # 2. Evidence Sufficiency
+        evidence_reasons: list[str] = []
+        if len(rows) < limits.maximum_sessions:
+            evidence_reasons.append("SESSION_COUNT_FLOOR")
+        if int(aggregate["normal_fill_count"]) < limits.minimum_normal_fills:
+            evidence_reasons.append("NORMAL_FILL_FLOOR")
+        if int(aggregate["normal_bid_fills"]) < limits.minimum_bid_fills:
+            evidence_reasons.append("BID_FILL_FLOOR")
+        if int(aggregate["normal_ask_fills"]) < limits.minimum_ask_fills:
+            evidence_reasons.append("ASK_FILL_FLOOR")
+        if _decimal(aggregate["fill_balance"], "fill_balance") < limits.minimum_fill_balance:
+            evidence_reasons.append("FILL_BALANCE_FLOOR")
+        if int(aggregate["normal_fifo_round_trips"]) < limits.minimum_fifo_round_trips:
+            evidence_reasons.append("FIFO_ROUND_TRIP_FLOOR")
+
+        evidence_sufficiency = (
+            EvidenceSufficiency.SUFFICIENT_EVIDENCE
+            if not evidence_reasons
+            else EvidenceSufficiency.MORE_EVIDENCE_REQUIRED
+        )
+
+        # 3. Economic Health
+        economic_reasons: list[str] = []
+        normal_net = _decimal(aggregate["normal_net_pnl_usdt"], "normal_net")
+        aggregate_net = _decimal(aggregate["aggregate_net_pnl_usdt"], "aggregate_net")
+        flatten_frac = _decimal(
+            aggregate["special_flatten_fraction"], "special_flatten_fraction"
+        )
+
+        if normal_net <= 0:
+            economic_reasons.append("NORMAL_NET_NOT_POSITIVE")
+        if flatten_frac > limits.maximum_special_flatten_fraction:
+            economic_reasons.append("SPECIAL_FLATTEN_RATE")
+        if aggregate_net <= 0:
+            economic_reasons.append("AGGREGATE_NET_NOT_POSITIVE")
+
+        if not economic_reasons:
+            economic_health = EconomicHealth.HEALTHY
+        elif normal_net > 0 and aggregate_net > 0 and flatten_frac <= Decimal("0.50"):
+            economic_health = EconomicHealth.DEGRADED
+        else:
+            economic_health = EconomicHealth.UNHEALTHY
+
+        # 4. Overall State
+        if not safety_pass:
+            overall_state = OverallOfflineState.UNSAFE
+        elif (
+            evidence_sufficiency is EvidenceSufficiency.SUFFICIENT_EVIDENCE
+            and economic_health is EconomicHealth.HEALTHY
+        ):
+            overall_state = OverallOfflineState.OFFLINE_QUALIFICATION_PASSED
+        elif (
+            evidence_sufficiency is EvidenceSufficiency.SUFFICIENT_EVIDENCE
+            and economic_health is EconomicHealth.DEGRADED
+        ):
+            overall_state = OverallOfflineState.OFFLINE_QUALIFICATION_CANDIDATE
+        elif economic_health in (EconomicHealth.HEALTHY, EconomicHealth.DEGRADED):
+            overall_state = OverallOfflineState.ECONOMICALLY_PROMISING
+        elif (
+            economic_health is EconomicHealth.UNHEALTHY
+            and evidence_sufficiency is EvidenceSufficiency.SUFFICIENT_EVIDENCE
+        ):
+            overall_state = OverallOfflineState.SAFE_OFFLINE
+        else:
+            overall_state = OverallOfflineState.MORE_EVIDENCE_REQUIRED
+
+        informational_status = (
+            "R1_ELIGIBLE_PENDING_EXPLICIT_AUTHORIZATION"
+            if overall_state
+            in (
+                OverallOfflineState.OFFLINE_QUALIFICATION_PASSED,
+                OverallOfflineState.OFFLINE_QUALIFICATION_CANDIDATE,
+            )
+            else None
+        )
+
+        return {
+            "safety_decision": safety_decision.value,
+            "safety_reasons": list(unsafe_reasons),
+            "economic_health": economic_health.value,
+            "economic_reasons": list(economic_reasons),
+            "evidence_sufficiency": evidence_sufficiency.value,
+            "evidence_reasons": list(evidence_reasons),
+            "overall_state": overall_state.value,
+            "informational_status": informational_status,
+            "aggregate": aggregate,
         }
 
     def evaluate(

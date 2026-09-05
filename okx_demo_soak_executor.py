@@ -24,6 +24,7 @@ from okx_demo_economic_session_controller import (
     EconomicSessionController,
     SampleEfficiencyQuotePolicy,
     SessionPhase,
+    WorkOffStage,
     fee_aware_quote_pair,
     fee_aware_workoff_edge,
     quote_still_valid,
@@ -536,6 +537,13 @@ class BoundedSoakExecutor:
                 required = (required / tick).to_integral_value(
                     rounding=ROUND_CEILING
                 ) * tick
+                if (
+                    self.activity is not None
+                    and getattr(self.activity, "current_workoff_stage", None)
+                    is WorkOffStage.AGGRESSIVE_MAKER_WORK_OFF
+                ):
+                    aggressive = max(Decimal(str(book.best_bid)) + tick, required)
+                    price = min(price, aggressive)
                 price = max(price, required)
                 entry_side = "buy"
             else:
@@ -545,6 +553,13 @@ class BoundedSoakExecutor:
                 required = (required / tick).to_integral_value(
                     rounding=ROUND_FLOOR
                 ) * tick
+                if (
+                    self.activity is not None
+                    and getattr(self.activity, "current_workoff_stage", None)
+                    is WorkOffStage.AGGRESSIVE_MAKER_WORK_OFF
+                ):
+                    aggressive = min(Decimal(str(book.best_ask)) - tick, required)
+                    price = max(price, aggressive)
                 price = min(price, required)
                 entry_side = "sell"
             if fee_aware_workoff_edge(
@@ -1001,7 +1016,7 @@ class BoundedSoakExecutor:
         flatten_inventory = Decimal(str(account.position_btc))
         if self.activity is not None:
             self.activity.authorize_taker_flatten(
-                reason="EMERGENCY_HARD_KILL" if self.hard_kill_triggered else "SHUTDOWN",
+                reason="RISK_EMERGENCY_FLATTEN" if self.hard_kill_triggered else "ROUTINE_TERMINAL_CLEANUP",
                 timestamp_ms=max(
                     int(self.now() * 1000), self.activity.last_timestamp_ms
                 ),
