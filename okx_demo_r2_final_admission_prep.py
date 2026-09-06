@@ -31,6 +31,7 @@ from typing import Any, Mapping
 from market_maker.as_config import MarketMakerV1Config
 from okx_demo_multi_session_campaign import CampaignLimits
 from okx_demo_profile import PromotedProfile, load_promoted_profile
+from okx_demo_r2_campaign_prep import _is_exact_fresh_r0_readiness_evidence
 from okx_demo_staged_validation import compute_candidate_fingerprint
 from okx_fill_restart_preflight_prepare import _OfflineSocketGuard
 
@@ -39,7 +40,7 @@ ROOT = Path(__file__).resolve().parent
 CANONICAL_R0_CLOSURE_REF = "r0-closure-20260904T121733Z"
 CANONICAL_R1_RUN_ID = "r1-preflight-run-20260904T121733Z"
 CANONICAL_R2_PREP_REF = "r2-prep-20260904T124817Z"
-EXPECTED_CANDIDATE_FINGERPRINT = "1d618d809a004001d6be5ad35f5865292b81c6cd4d7a7713f21bb6cde9636ccf"
+EXPECTED_CANDIDATE_FINGERPRINT = "ef993bc42ffbb19cf1bfc94d3dcca32cd19909c9b0d9da73ab0a01ab0088ffb8"
 
 # Exactly ten canonical tunable strategy controls as defined by MarketMakerV1Config
 CANONICAL_TEN_TUNABLE_CONTROLS = (
@@ -138,13 +139,21 @@ def build_r2_final_admission_package(
     if not r0_marker.is_file():
         raise FileNotFoundError(f"Prerequisite R0 closure marker missing: {r0_marker}")
     r0_data = json.loads(r0_marker.read_text(encoding="utf-8"))
-    recorded_r0_ref = r0_data.get("closure_package_id") or r0_data.get("audit_id") or r0_data.get("repair_id")
+    recorded_r0_ref = (
+        r0_data.get("closure_package_id")
+        or r0_data.get("audit_id")
+        or r0_data.get("repair_id")
+        or r0_data.get("evidence_id")
+    )
     if recorded_r0_ref != expected_r0_ref:
         raise ValueError("R0 predecessor identity mismatch")
     if r0_evidence_dir is None and r0_data.get("status") != "R0_OFFLINE_QUALIFICATION_PASSED":
         raise ValueError(f"R0 closure status invalid: {r0_data.get('status')}")
-    if r0_evidence_dir is not None and r0_data.get("decision") != "R2_CAMPAIGN_EXPIRED_NOT_READY":
-        raise ValueError("Fresh R0 diagnostic is not eligible for successor R2 package")
+    if r0_evidence_dir is not None:
+        is_legacy_expiry_audit = r0_data.get("decision") == "R2_CAMPAIGN_EXPIRED_NOT_READY"
+        is_fresh_readiness_evidence = _is_exact_fresh_r0_readiness_evidence(r0_data)
+        if not (is_legacy_expiry_audit or is_fresh_readiness_evidence):
+            raise ValueError("Fresh R0 evidence is not eligible for successor R2 package")
 
     # 3. Verify R1 preflight prerequisite
     r1_dir = root / "artifacts" / "r1_read_only_preflight_runs" / r1_run_id

@@ -101,6 +101,7 @@ def test_single_session_executor_uses_only_admitted_s02_fixture() -> None:
             campaign_id=ARGS["campaign_id"],
             session_id="r2-session-20260905T025807Z-s02:p0:aff7afc4",
             arm_token="OKX_DEMO:r2-session-20260905T025807Z-s02:p0:aff7afc4",
+            admission_now=datetime(2026, 9, 5, 3, 30, tzinfo=timezone.utc),
             stamp=stamp,
             execution_stage="TEST_FIXTURE",
             exchange=PreflightMockExchange(),

@@ -38,6 +38,7 @@ from okx_demo_profile import load_promoted_profile
 from okx_demo_runtime import MarketDataGate
 from okx_demo_state import DemoStateStore
 from okx_demo_staged_validation import compute_candidate_fingerprint
+from okx_demo_r2_evidence_integrity import EvidenceIntegrityError, replay_fill_ledger
 
 ROOT = Path(__file__).resolve().parent
 
@@ -45,7 +46,7 @@ CANONICAL_R0_CLOSURE_REF = "r0-closure-20260904T121733Z"
 CANONICAL_R1_RUN_ID = "r1-preflight-run-20260904T121733Z"
 CANONICAL_R2_PREP_REF = "r2-prep-20260904T124817Z"
 CANONICAL_R2_FINAL_PREP_REF = "r2-final-prep-20260904T130500Z"
-EXPECTED_CANDIDATE_FINGERPRINT = "1d618d809a004001d6be5ad35f5865292b81c6cd4d7a7713f21bb6cde9636ccf"
+EXPECTED_CANDIDATE_FINGERPRINT = "ef993bc42ffbb19cf1bfc94d3dcca32cd19909c9b0d9da73ab0a01ab0088ffb8"
 CANONICAL_SESSION_ID = "r2-session-20260904T130500Z-s01:p0:1f7a850b"
 CANONICAL_ARM_TOKEN = f"OKX_DEMO:{CANONICAL_SESSION_ID}"
 CANONICAL_CAMPAIGN_ID = "r2-campaign-20260904T130500Z"
@@ -168,6 +169,9 @@ class AuditedCanaryExchangeWrapper:
         self.live_endpoint_attempts: int = 0
         self.orders_created: int = 0
         self.orders_cancelled: int = 0
+        self.created_client_order_ids: set[str] = set()
+        self.cancelled_order_ids: set[str] = set()
+        self.mutation_retry_attempts: int = 0
 
     @property
     def options(self) -> dict[str, Any]:
@@ -203,6 +207,11 @@ class AuditedCanaryExchangeWrapper:
         # Mandatory post-only check
         if not (params.get("postOnly") is True or params.get("ordType") == "post_only"):
             raise DemoAdapterError("Non-post-only order creation is strictly prohibited in canary")
+        client_id = str(params.get("clOrdId") or "")
+        if not client_id or client_id in self.created_client_order_ids:
+            self.mutation_retry_attempts += 1
+            raise DemoAdapterError("Canary duplicate or missing create identity is prohibited")
+        self.created_client_order_ids.add(client_id)
         self.orders_created += 1
         return self._raw_exchange.create_order(
             symbol,
@@ -223,11 +232,12 @@ class AuditedCanaryExchangeWrapper:
         **kwargs: Any,
     ) -> dict[str, Any]:
         self.endpoint_calls["cancel_order"] = self.endpoint_calls.get("cancel_order", 0) + 1
+        if id in self.cancelled_order_ids:
+            self.mutation_retry_attempts += 1
+            raise DemoAdapterError("Canary cancel retry is prohibited")
+        self.cancelled_order_ids.add(id)
         self.orders_cancelled += 1
-        try:
-            return self._raw_exchange.cancel_order(id, symbol, *args, **kwargs)
-        except TypeError:
-            return self._raw_exchange.cancel_order(id, symbol)
+        return self._raw_exchange.cancel_order(id, symbol, *args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
         if name in PROHIBITED_MUTATION_METHODS:
@@ -505,24 +515,45 @@ def execute_r2_canary(
 
     # 7. Stage B Hard Checkpoint 1 Evaluation (17 checks)
     print("Evaluating Stage B Hard Checkpoint 1...")
+    state = adapter.state
+    owned_fills = list(adapter.session_owned_fills)
+    try:
+        ledger = replay_fill_ledger(owned_fills)
+        complete_fill_attribution = len(adapter.foreign_fills_observed) == 0
+    except EvidenceIntegrityError as exc:
+        ledger = {"error": str(exc)}
+        complete_fill_attribution = False
+    local_state_reconciled = bool(
+        state
+        and abs(float(state.inventory_btc) - float(terminal_snapshot.position_btc)) <= 1e-12
+        and not state.owned_open_orders
+    )
+    fee_reconciled = bool(
+        state
+        and Decimal(str(ledger.get("fees_usdt", "NaN"))) == adapter.session_owned_fees_usdt
+        and Decimal(str(ledger.get("gross_realized_pnl_usdt", "NaN"))) == adapter.session_owned_realized_pnl
+    )
+    fifo_reconciled = ledger.get("normal_fifo_round_trips") == adapter.session_fifo_round_trips
+    flatten_resolved = bool(state and state.flatten_state in {"IDLE", "CONFIRMED"} and state.flatten_attempts <= 1)
+    no_ambiguity = bool(state and not state.kill_switch.active and not adapter.halted_reason)
     hard_checks = {
         "01_terminal_position_flat": abs(terminal_snapshot.position_btc) == 0.0,
         "02_terminal_owned_orders_zero": len(terminal_snapshot.open_orders) == 0,
-        "03_unknown_fills_zero": len(getattr(adapter, "unmapped_trades", [])) == 0,
-        "04_unclassified_events_zero": True,
-        "05_mutation_ambiguity_zero": True,
-        "06_unresolved_flatten_zero": True,
-        "07_inventory_cap_breaches_zero": abs(terminal_snapshot.position_btc) <= 0.01,
-        "08_owned_order_count_breaches_zero": True,
+        "03_unknown_fills_zero": complete_fill_attribution,
+        "04_unclassified_events_zero": complete_fill_attribution,
+        "05_mutation_ambiguity_zero": no_ambiguity,
+        "06_unresolved_flatten_zero": flatten_resolved,
+        "07_inventory_cap_breaches_zero": abs(terminal_snapshot.position_btc) <= 0.01 and bool(state and abs(state.inventory_btc) <= 0.01),
+        "08_owned_order_count_breaches_zero": bool(state and len(state.owned_open_orders) <= 2),
         "09_normal_create_budget_breaches_zero": normal_creates_count <= 60,
-        "10_exact_accounting_reconciled": True,
-        "11_fee_attribution_reconciled": True,
-        "12_fifo_attribution_reconciled": True,
+        "10_exact_accounting_reconciled": local_state_reconciled and complete_fill_attribution,
+        "11_fee_attribution_reconciled": fee_reconciled and complete_fill_attribution,
+        "12_fifo_attribution_reconciled": fifo_reconciled and complete_fill_attribution,
         "13_clock_skew_violations_zero": terminal_snapshot.clock_skew_ms <= 1500,
-        "14_book_safety_violations_zero": True,
+        "14_book_safety_violations_zero": len(cycle_history) == lifecycle_cycles,
         "15_live_endpoint_attempts_zero": audited_exchange.live_endpoint_attempts == 0,
         "16_account_mutation_attempts_zero": len(audited_exchange.intercepted_mutations) == 0,
-        "17_mutation_retries_zero": True,
+        "17_mutation_retries_zero": audited_exchange.mutation_retry_attempts == 0,
     }
 
     checkpoint_passed = all(hard_checks.values())
@@ -575,6 +606,20 @@ def execute_r2_canary(
         "passed_count": sum(1 for v in hard_checks.values() if v),
         "session_id": session_id,
         "total_checks": len(hard_checks),
+    })
+
+    write_json_atomic(run_dir / "hard_checkpoint_1_evidence.json", {
+        "complete_fill_attribution": complete_fill_attribution,
+        "foreign_fills_observed": len(adapter.foreign_fills_observed),
+        "local_state_reconciled": local_state_reconciled,
+        "fee_reconciled": fee_reconciled,
+        "fifo_round_trips": adapter.session_fifo_round_trips,
+        "fifo_reconciled": fifo_reconciled,
+        "flatten_state": state.flatten_state if state else "MISSING",
+        "flatten_attempts": state.flatten_attempts if state else None,
+        "mutation_retry_attempts": audited_exchange.mutation_retry_attempts,
+        "owned_fill_count": len(owned_fills),
+        "ledger_replay": ledger,
     })
 
     write_json_atomic(run_dir / "endpoint_audit.json", {

@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -57,6 +58,15 @@ SOURCE_FILES = (
     "okx_demo_soak_executor.py",
     "okx_demo_multi_session_campaign.py",
     "okx_demo_staged_validation.py",
+    "okx_demo_adapter.py",
+    "okx_demo_r2_evidence_integrity.py",
+    "okx_demo_r2_canary_executor.py",
+    "okx_demo_r2_stage_c_executor.py",
+    "okx_demo_r2_stage_c_supervisor.py",
+    "okx_demo_r2_stage_c_worker.py",
+    "okx_demo_r2_s02_s03_continuation.py",
+    "okx_demo_r2_campaign_prep.py",
+    "okx_demo_r2_final_admission_prep.py",
 )
 
 
@@ -162,7 +172,16 @@ def compute_candidate_fingerprint(root: Path | None = None) -> dict[str, object]
     for filename in SOURCE_FILES:
         target = base / filename
         if target.is_file():
-            file_hashes[filename] = hashlib.sha256(target.read_bytes()).hexdigest()
+            # Package-bound fingerprint literals are outputs of this function.
+            # Normalize only those literals so adding an admission/execution file
+            # to the candidate cannot create a self-referential hash cycle.
+            source = target.read_text(encoding="utf-8")
+            source = re.sub(
+                r'(EXPECTED_CANDIDATE_FINGERPRINT\s*=\s*)"[0-9a-f]{64}"',
+                r'\1"<BOUND_BY_CANDIDATE_FINGERPRINT>"',
+                source,
+            )
+            file_hashes[filename] = hashlib.sha256(source.encode("utf-8")).hexdigest()
         else:
             file_hashes[filename] = "MISSING"
     policy_dict = SampleEfficiencyQuotePolicy().to_dict()

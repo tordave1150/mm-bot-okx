@@ -28,12 +28,38 @@ from okx_demo_r2_final_admission_prep import (
     CANONICAL_FROZEN_MODEL_INPUTS,
     CANONICAL_FROZEN_SAFETY_INPUTS,
     build_r2_final_admission_package,
+    _is_exact_fresh_r0_readiness_evidence,
 )
+from okx_demo_r2_campaign_prep import _is_exact_fresh_r0_readiness_evidence as campaign_prep_r0_admission
 from okx_demo_state import DemoStateStore
 from okx_fill_restart_preflight_prepare import _OfflineSocketGuard
 from tests.test_okx_demo_r1_preflight_preparation import PreflightMockExchange
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_final_admission_reuses_campaign_prep_r0_admission_verifier() -> None:
+    repair = {
+        "status": "R0_OFFLINE_REPAIR_PASSED",
+        "decision": "FRESH_R1_PREPARATION_ELIGIBLE_PENDING_EXPLICIT_AUTHORIZATION",
+        "repaired_r0_evidence_id": "r0-x",
+        "candidate_fingerprint": "a" * 64,
+        "repair_results": {
+            "accepts_exact_post_clearance_zero_zero_schema": True,
+            "rejects_missing_or_nonzero_clearance_fields": True,
+            "rejects_stale_r1_candidate_fingerprint": True,
+        },
+        "offline_verification": {
+            "credentials_read": 0, "network_attempts": 0, "orders_or_mutations": 0,
+            "mutation_retries": 0, "live_endpoint_attempts": 0,
+        },
+        "boundaries": {
+            "r1_prepared": False, "r2_prepared": False, "r2_executed": False,
+            "r3_prepared_or_run": False, "live_or_production": False,
+        },
+    }
+    assert _is_exact_fresh_r0_readiness_evidence is campaign_prep_r0_admission
+    assert _is_exact_fresh_r0_readiness_evidence(repair)
 
 
 @pytest.fixture(autouse=True)
@@ -379,6 +405,31 @@ def test_requirement_30_preparation_mode_performs_zero_order_mutations() -> None
         assert terminal["account_mutations"] == 0
         assert terminal["live_endpoint_attempts"] == 0
         assert terminal["r2_execution_authorized"] is False
+    finally:
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+
+
+def test_fresh_chain_readiness_predecessors_bind_exactly() -> None:
+    """Fresh R0/R1/R2 predecessors must be accepted only as an exact chain."""
+    stamp = "test-fresh-chain-final-admission"
+    target_dir = ROOT / "artifacts" / "r2_final_admission_preparation" / f"r2-final-prep-{stamp}"
+    try:
+        package = build_r2_final_admission_package(
+            root=ROOT,
+            stamp=stamp,
+            r1_run_id="r1-preflight-run-20260905T093701Z",
+            r2_prep_ref="r2-prep-20260905T095901Z",
+            r0_evidence_id="r0-fresh-chain-readiness-offline-20260905T093430Z",
+            r0_evidence_dir=(
+                ROOT / "artifacts" / "r0_fresh_chain_readiness"
+                / "r0-fresh-chain-readiness-offline-20260905T093430Z"
+            ),
+        )
+        manifest = json.loads((package / "prerequisite_manifest.json").read_text(encoding="utf-8"))
+        assert manifest["r0_closure"]["closure_package_id"] == "r0-fresh-chain-readiness-offline-20260905T093430Z"
+        assert manifest["r1_preflight"]["run_id"] == "r1-preflight-run-20260905T093701Z"
+        assert manifest["r2_initial_prep"]["prep_id"] == "r2-prep-20260905T095901Z"
     finally:
         if target_dir.exists():
             shutil.rmtree(target_dir, ignore_errors=True)

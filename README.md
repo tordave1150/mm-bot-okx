@@ -1,8 +1,19 @@
 # bot-trade — OKX Demo Market-Maker Research
 
+## Development direction
+
+See [PROJECT_DIRECTION.md](PROJECT_DIRECTION.md) for the 2026-09-06 development
+reset: reconcile the current evidence, close one lifecycle blocker, demonstrate
+a complete Demo session, then evaluate economics. The plan records newer local
+artifacts than the status summary below; it does not authorize execution or
+certify those runs. Complete its baseline reconciliation before selecting a run.
+
 ## Current status
 
-This repository is in **R0 offline repair** for an OKX Demo market-maker. It is not approved for R1 preflight, an economic campaign, Live access, or production.
+This repository is an OKX Demo market-maker research and safety-validation
+workspace. It is not approved for Live access or production. The latest
+campaign is closed after its frozen wall-time expired; see
+[CURRENT_STATUS.md](CURRENT_STATUS.md) for the evidence-backed state.
 
 ```text
 production_authorized: false
@@ -15,7 +26,9 @@ holdout_opened: false
 git_write_operation: false
 ```
 
-Read [AGENTS.md](AGENTS.md) before any execution. Its active phase and risk rules override this README.
+Use [CURRENT_STATUS.md](CURRENT_STATUS.md) and the applicable explicitly
+authorized execution package before any action. This repository currently has
+no active `AGENTS.md` file.
 
 ## Canonical implementation
 
@@ -75,6 +88,9 @@ artifacts/okx_demo_multi_session_economic_soak/packages/economic-package-2026081
 
 Historical artifacts are not runtime dependencies, but must be retained or externally archived with a manifest and verified hashes before cleanup. Do not bulk-delete `artifacts/`.
 
-## Next boundary
+## Current execution boundary
 
-After fresh R0 evidence passes every mandatory gate, obtain separate exact user authorization before preparing fresh R1 identities. R1 preparation, R1 preflight, and R2 economic campaign are separate phases; none authorizes production.
+Do not resume or reuse closed campaign identities. A new Demo campaign requires
+a fresh evidence chain and explicit authorization for each network-capable stage.
+R1 preparation, R1 preflight, R2 economic execution and production remain
+separate boundaries.

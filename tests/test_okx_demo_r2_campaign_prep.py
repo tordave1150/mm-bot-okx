@@ -161,3 +161,28 @@ def test_fresh_r0_and_r1_predecessors_bind_exactly() -> None:
     finally:
         if target.exists():
             shutil.rmtree(target, ignore_errors=True)
+
+
+def test_fresh_chain_readiness_r0_binds_to_its_exact_r1_run() -> None:
+    """A fresh readiness marker is eligible only with its exact passed R1 run."""
+    stamp = "test-fresh-chain-readiness"
+    target = ROOT / "artifacts" / "r2_economic_campaign_preparation" / f"r2-prep-{stamp}"
+    if target.exists():
+        shutil.rmtree(target, ignore_errors=True)
+    try:
+        package = build_r2_campaign_preparation_package(
+            root=ROOT,
+            stamp=stamp,
+            r1_run_id="r1-preflight-run-20260905T093701Z",
+            r0_evidence_id="r0-fresh-chain-readiness-offline-20260905T093430Z",
+            r0_evidence_dir=(
+                ROOT / "artifacts" / "r0_fresh_chain_readiness"
+                / "r0-fresh-chain-readiness-offline-20260905T093430Z"
+            ),
+        )
+        terminal = json.loads((package / "R2_PREPARATION_COMPLETED.json").read_text(encoding="utf-8"))
+        assert terminal["r0_evidence_id"] == "r0-fresh-chain-readiness-offline-20260905T093430Z"
+        assert terminal["r1_run_id"] == "r1-preflight-run-20260905T093701Z"
+    finally:
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)

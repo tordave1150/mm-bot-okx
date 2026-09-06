@@ -16,6 +16,7 @@ CODEX_EXECUTION_R2_THREE_SESSION_CHECKPOINT.md
 from __future__ import annotations
 
 import argparse
+import atexit
 import hashlib
 import json
 import os
@@ -42,6 +43,7 @@ from okx_demo_profile import load_promoted_profile
 from okx_demo_runtime import MarketDataGate
 from okx_demo_state import DemoStateStore
 from okx_demo_staged_validation import compute_candidate_fingerprint
+from okx_demo_r2_evidence_integrity import EvidenceIntegrityError, replay_fill_ledger
 
 ROOT = Path(__file__).resolve().parent
 
@@ -50,7 +52,7 @@ CANONICAL_R1_RUN_ID = "r1-preflight-run-20260904T121733Z"
 CANONICAL_R2_FINAL_PREP_REF = "r2-final-prep-20260904T130500Z"
 CANONICAL_R2_CANARY_RUN_ID = "r2-canary-run-20260904T131836Z"
 CANONICAL_STAGE_C_PREP_REF = "r2-stage-c-prep-20260904T133500Z"
-EXPECTED_CANDIDATE_FINGERPRINT = "1d618d809a004001d6be5ad35f5865292b81c6cd4d7a7713f21bb6cde9636ccf"
+EXPECTED_CANDIDATE_FINGERPRINT = "ef993bc42ffbb19cf1bfc94d3dcca32cd19909c9b0d9da73ab0a01ab0088ffb8"
 CANONICAL_CAMPAIGN_ID = "r2-qualification-campaign-20260904T133500Z"
 
 SLOT_SCHEDULE = [
@@ -128,6 +130,41 @@ def write_json_atomic(target: Path, payload: Mapping[str, Any]) -> None:
     temp_target.replace(target)
 
 
+def write_interruption_guard(
+    *,
+    run_dir: Path,
+    run_id: str,
+    campaign_id: str,
+    execution_scope: str,
+    slots: list[Mapping[str, Any]],
+) -> Path:
+    """Durably deny successor admission until this run writes its terminal marker.
+
+    A process can be terminated without giving Python a chance to execute an
+    exception handler. This marker is written before credentials, transport,
+    or mutations, so an absent completion marker is always fail-closed.
+    """
+    guard = run_dir / "R2_STAGE_C_INTERRUPTION_GUARD.json"
+    write_json_atomic(guard, {
+        "status": "R2_STAGE_C_IN_PROGRESS_OR_INTERRUPTED_NOT_ACCEPTABLE",
+        "run_id": run_id,
+        "campaign_id": campaign_id,
+        "execution_scope": execution_scope,
+        "session_ids": [str(slot["session_id"]) for slot in slots],
+        "accept_authorized": False,
+        "retry_authorized": False,
+        "resume_authorized": False,
+        "identity_reuse_authorized": False,
+        "successor_session_authorized": False,
+        "terminal_account_authoritative": False,
+        "credential_reads_at_guard_write": 0,
+        "network_attempts_at_guard_write": 0,
+        "order_mutations_at_guard_write": 0,
+        "superseded_only_by": "R2_STAGE_C_EXECUTION_COMPLETED.json",
+    })
+    return guard
+
+
 def generate_completion_hashes(directory: Path, marker_filename: str) -> dict[str, str]:
     ignored = {"completion_hashes.json", marker_filename}
     hashes: dict[str, str] = {}
@@ -136,6 +173,106 @@ def generate_completion_hashes(directory: Path, marker_filename: str) -> dict[st
             relative_name = item.relative_to(directory).as_posix()
             hashes[relative_name] = hash_file(item)
     return hashes
+
+
+def write_post_flatten_terminal_failure(
+    *,
+    run_dir: Path,
+    run_id: str,
+    campaign_id: str,
+    session_id: str,
+    phase: str,
+    state_path: Path,
+    audited_exchange: Any | None,
+    reason_code: str = "POST_FLATTEN_TERMINAL_RECONCILIATION_FAILED",
+) -> Path:
+    """Write one immutable, fail-closed marker when execution cannot finish.
+
+    This handler intentionally performs no exchange operation. A failure after a
+    flatten dispatch cannot establish an authoritative account state from local
+    data, so the run and its session identity remain ineligible for accept,
+    retry, resume, reuse, or successor admission.
+    """
+    terminal_path = run_dir / "R2_STAGE_C_EXECUTION_FAILED.json"
+    if terminal_path.exists():
+        return terminal_path
+    if (run_dir / "R2_STAGE_C_EXECUTION_COMPLETED.json").exists():
+        raise DemoAdapterError("Cannot write failure evidence after terminal success")
+
+    def counter(field: str) -> int:
+        return int(getattr(audited_exchange, field, 0))
+
+    failure_evidence = run_dir / "terminal_failure_evidence.json"
+    write_json_atomic(failure_evidence, {
+        "status": "R2_STAGE_C_POST_FLATTEN_TERMINAL_FAILURE",
+        "run_id": run_id,
+        "campaign_id": campaign_id,
+        "session_id": session_id,
+        "failure_phase": phase,
+        "failure_reason_code": reason_code,
+        "local_state_available": state_path.is_file(),
+        "local_state_sha256": hash_file(state_path) if state_path.is_file() else None,
+        "normal_create_dispatches": counter("normal_orders_created"),
+        "flatten_dispatches": counter("flatten_orders_created"),
+        "cancel_dispatches": counter("orders_cancelled"),
+        "mutation_retries": counter("mutation_retry_attempts"),
+        "live_endpoint_attempts": counter("live_endpoint_attempts"),
+        "terminal_account_authoritative": False,
+        "reconciliation": False,
+        "accept_authorized": False,
+        "retry_authorized": False,
+        "resume_authorized": False,
+        "identity_reuse_authorized": False,
+        "successor_session_authorized": False,
+    })
+    completion_hashes = generate_completion_hashes(run_dir, "R2_STAGE_C_EXECUTION_FAILED.json")
+    write_json_atomic(run_dir / "completion_hashes.json", completion_hashes)
+    write_json_atomic(terminal_path, {
+        "status": "R2_STAGE_C_EXECUTION_FAILED_NOT_ACCEPTABLE",
+        "run_id": run_id,
+        "campaign_id": campaign_id,
+        "session_id": session_id,
+        "failure_phase": phase,
+        "failure_reason_code": reason_code,
+        "terminal_account_authoritative": False,
+        "reconciliation": False,
+        "accept_authorized": False,
+        "retry_authorized": False,
+        "resume_authorized": False,
+        "identity_reuse_authorized": False,
+        "successor_session_authorized": False,
+        "completion_hashes_sha256": canonical_sha256(json.dumps(completion_hashes, sort_keys=True)),
+        "files_verified": len(completion_hashes),
+    })
+    return terminal_path
+
+
+def write_unterminated_stage_c_failure(
+    *,
+    run_dir: Path,
+    run_id: str,
+    campaign_id: str,
+    session_ids: list[str],
+    audited_exchange: Any | None,
+    reason_code: str = "UNHANDLED_STAGE_C_LIFECYCLE_EXCEPTION_OR_INTERRUPTION",
+) -> Path:
+    """Latch any unhandled post-guard exit as non-authoritative local evidence.
+
+    This is intentionally local-only and is also the fallback for exceptions
+    outside terminal reconciliation. A hard process kill can still bypass
+    ``atexit``; the pre-existing interruption guard remains authoritative then.
+    """
+    state_files = sorted((run_dir / "state").glob("*_runtime_state.json"))
+    return write_post_flatten_terminal_failure(
+        run_dir=run_dir,
+        run_id=run_id,
+        campaign_id=campaign_id,
+        session_id=session_ids[-1] if session_ids else "UNKNOWN_SESSION",
+        phase="UNHANDLED_POST_GUARD_EXIT",
+        state_path=state_files[-1] if state_files else run_dir / "state" / "missing_runtime_state.json",
+        audited_exchange=audited_exchange,
+        reason_code=reason_code,
+    )
 
 
 class AuditedStageCExchangeWrapper:
@@ -157,6 +294,9 @@ class AuditedStageCExchangeWrapper:
         self.normal_orders_created: int = 0
         self.flatten_orders_created: int = 0
         self.orders_cancelled: int = 0
+        self.created_client_order_ids: set[str] = set()
+        self.cancelled_order_ids: set[str] = set()
+        self.mutation_retry_attempts: int = 0
 
     @property
     def options(self) -> dict[str, Any]:
@@ -195,6 +335,11 @@ class AuditedStageCExchangeWrapper:
             raise DemoAdapterError(
                 "Normal-path non-post-only order creation is strictly prohibited in Stage C"
             )
+        client_id = str(params.get("clOrdId") or "")
+        if not client_id or client_id in self.created_client_order_ids:
+            self.mutation_retry_attempts += 1
+            raise DemoAdapterError("Stage C duplicate or missing create identity is prohibited")
+        self.created_client_order_ids.add(client_id)
         if is_reduce_only:
             self.flatten_orders_created += 1
         else:
@@ -218,11 +363,12 @@ class AuditedStageCExchangeWrapper:
         **kwargs: Any,
     ) -> dict[str, Any]:
         self.endpoint_calls["cancel_order"] = self.endpoint_calls.get("cancel_order", 0) + 1
+        if not id or id in self.cancelled_order_ids:
+            self.mutation_retry_attempts += 1
+            raise DemoAdapterError("Stage C cancel retry is prohibited")
+        self.cancelled_order_ids.add(id)
         self.orders_cancelled += 1
-        try:
-            return self._raw_exchange.cancel_order(id, symbol, *args, **kwargs)
-        except TypeError:
-            return self._raw_exchange.cancel_order(id, symbol)
+        return self._raw_exchange.cancel_order(id, symbol, *args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
         if name in PROHIBITED_MUTATION_METHODS:
@@ -364,6 +510,60 @@ def execute_r2_stage_c(
     print(f"=== Initiating R2 Stage C Execution ({run_id}) ===")
     print(f"Campaign ID: {campaign_id}")
     target_schedule = slot_schedule or SLOT_SCHEDULE
+    write_interruption_guard(
+        run_dir=run_dir,
+        run_id=run_id,
+        campaign_id=campaign_id,
+        execution_scope=execution_scope,
+        slots=target_schedule,
+    )
+    failure_context: dict[str, Any] = {"audited_exchange": None}
+
+    def record_latch_write_error(exc: BaseException) -> None:
+        """Never silently discard a failure-evidence write error."""
+        write_json_atomic(run_dir / "R2_STAGE_C_FAILURE_EVIDENCE_WRITE_ERROR.json", {
+            "status": "R2_STAGE_C_FAILURE_EVIDENCE_WRITE_ERROR",
+            "run_id": run_id,
+            "campaign_id": campaign_id,
+            "error_type": type(exc).__name__,
+            "terminal_account_authoritative": False,
+            "accept_authorized": False,
+            "retry_authorized": False,
+            "resume_authorized": False,
+            "identity_reuse_authorized": False,
+            "successor_session_authorized": False,
+        })
+
+    def latch_unhandled_exit() -> None:
+        try:
+            write_unterminated_stage_c_failure(
+                run_dir=run_dir,
+                run_id=run_id,
+                campaign_id=campaign_id,
+                session_ids=[str(slot["session_id"]) for slot in target_schedule],
+                audited_exchange=failure_context["audited_exchange"],
+            )
+        except Exception:
+            record_latch_write_error(sys.exc_info()[1] or RuntimeError("unknown latch failure"))
+
+    atexit.register(latch_unhandled_exit)
+    original_excepthook = sys.excepthook
+
+    def stage_c_excepthook(exc_type: type[BaseException], exc: BaseException, tb: Any) -> None:
+        try:
+            write_unterminated_stage_c_failure(
+                run_dir=run_dir,
+                run_id=run_id,
+                campaign_id=campaign_id,
+                session_ids=[str(slot["session_id"]) for slot in target_schedule],
+                audited_exchange=failure_context["audited_exchange"],
+                reason_code=f"UNHANDLED_STAGE_C_EXCEPTION_{exc_type.__name__.upper()}",
+            )
+        except Exception as latch_exc:
+            record_latch_write_error(latch_exc)
+        original_excepthook(exc_type, exc, tb)
+
+    sys.excepthook = stage_c_excepthook
     next_status = (
         "R2_NEXT_CURRENT_STAGE_C_DECISION_PENDING_SEPARATE_EXPLICIT_AUTHORIZATION"
         if execution_scope == "R2_CURRENT_STAGE_C_SINGLE_SESSION"
@@ -391,6 +591,7 @@ def execute_r2_stage_c(
         raw_exchange = build_ccxt_demo_exchange(api_key=key, api_secret=sec, passphrase=pass_phrase)
 
     audited_exchange = AuditedStageCExchangeWrapper(raw_exchange)
+    failure_context["audited_exchange"] = audited_exchange
     market_gate = MarketDataGate()
 
     campaign_start_s = time.time()
@@ -577,34 +778,63 @@ def execute_r2_stage_c(
             if tick_interval_s > 0:
                 time.sleep(tick_interval_s)
 
-        # 4d. Session Terminal Reconciliation
-        print(f"[{slot_label}] Reconciling terminal session state...")
-        adapter.cancel_all_owned()
-        mid_term_snap = adapter.preflight()
+        # 4d. Session Terminal Reconciliation. Any exception after a possible
+        # flatten dispatch gets durable failure evidence before it escapes.
+        terminal_phase = "TERMINAL_CANCEL"
+        try:
+            print(f"[{slot_label}] Reconciling terminal session state...")
+            adapter.cancel_all_owned()
+            terminal_phase = "POST_TERMINAL_CANCEL_READ"
+            mid_term_snap = adapter.preflight()
 
-        routine_cleanup_count = 0
-        emergency_flatten_count = 0
-        if abs(mid_term_snap.position_btc) > 1e-8:
-            print(f"[{slot_label}] Executing routine terminal cleanup for {mid_term_snap.position_btc} BTC...")
-            flatten_order = adapter.submit_emergency_flatten(
-                position_btc=mid_term_snap.position_btc,
-                reference_price=float(book["best_bid"] if mid_term_snap.position_btc > 0 else book["best_ask"]),
-            )
-            if flatten_order is not None:
-                routine_cleanup_count += 1
-                session_flatten_creates += 1
-                aggregate_flatten_creates += 1
+            routine_cleanup_count = 0
+            emergency_flatten_count = 0
+            if abs(mid_term_snap.position_btc) > 1e-8:
+                print(f"[{slot_label}] Executing routine terminal cleanup for {mid_term_snap.position_btc} BTC...")
+                terminal_phase = "FLATTEN_DISPATCH"
+                flatten_order = adapter.submit_emergency_flatten(
+                    position_btc=mid_term_snap.position_btc,
+                    reference_price=float(book["best_bid"] if mid_term_snap.position_btc > 0 else book["best_ask"]),
+                )
+                terminal_phase = "POST_FLATTEN_RECONCILIATION"
+                if flatten_order is not None:
+                    routine_cleanup_count += 1
+                    session_flatten_creates += 1
+                    aggregate_flatten_creates += 1
 
-        final_term_snap = adapter.preflight()
-        if abs(final_term_snap.position_btc) > 1e-8:
-            raise DemoAdapterError(f"[{slot_label}] Terminal position not flat: {final_term_snap.position_btc} BTC")
-        if len(final_term_snap.open_orders) > 0:
-            raise DemoAdapterError(f"[{slot_label}] Terminal open orders remain: {len(final_term_snap.open_orders)}")
+            terminal_phase = "FINAL_TERMINAL_READ"
+            final_term_snap = adapter.preflight()
+            if abs(final_term_snap.position_btc) > 1e-8:
+                raise DemoAdapterError(f"[{slot_label}] Terminal position not flat: {final_term_snap.position_btc} BTC")
+            if len(final_term_snap.open_orders) > 0:
+                raise DemoAdapterError(f"[{slot_label}] Terminal open orders remain: {len(final_term_snap.open_orders)}")
+        except BaseException:
+            try:
+                write_post_flatten_terminal_failure(
+                    run_dir=run_dir,
+                    run_id=run_id,
+                    campaign_id=campaign_id,
+                    session_id=session_id,
+                    phase=terminal_phase,
+                    state_path=session_state_file,
+                    audited_exchange=audited_exchange,
+                )
+            except Exception:
+                # Preserve the original terminal failure. The pre-execution guard
+                # still blocks successors if local storage itself is unavailable.
+                pass
+            raise
 
         session_duration_s = time.time() - session_start_s
         session_net_pnl = Decimal(str(adapter.state.net_realized_pnl_usdt if adapter.state else 0.0))
         cumulative_realized_pnl += session_net_pnl
 
+        try:
+            ledger = replay_fill_ledger(adapter.session_owned_fills)
+            ledger_valid = len(adapter.foreign_fills_observed) == 0
+        except EvidenceIntegrityError as exc:
+            ledger = {"error": str(exc)}
+            ledger_valid = False
         session_audit = {
             "admission_audit": admission_audit,
             "canonical_termination_reason": canonical_termination_reason,
@@ -628,6 +858,26 @@ def execute_r2_stage_c(
             "terminal_open_orders": len(final_term_snap.open_orders),
             "terminal_position_btc": final_term_snap.position_btc,
             "total_fees_usdt": str(adapter.state.total_fees_usdt if adapter.state else 0.0),
+            "foreign_fills_observed": len(adapter.foreign_fills_observed),
+            "unclassified_events_zero": ledger_valid,
+            "mutation_ambiguity_zero": bool(adapter.state and not adapter.state.kill_switch.active and not adapter.halted_reason),
+            "unresolved_flatten_zero": bool(adapter.state and adapter.state.flatten_state in {"IDLE", "CONFIRMED"}),
+            "inventory_cap_respected": bool(adapter.state and abs(adapter.state.inventory_btc) <= 0.01),
+            "owned_order_cap_respected": bool(adapter.state and len(adapter.state.owned_open_orders) <= 2),
+            "exact_accounting_reconciled": bool(
+                adapter.state
+                and abs(adapter.state.inventory_btc - final_term_snap.position_btc) <= 1e-12
+                and not adapter.state.owned_open_orders
+                and Decimal(ledger.get("inventory_btc", "NaN")) == Decimal(str(final_term_snap.position_btc))
+                and Decimal(ledger.get("gross_realized_pnl_usdt", "NaN")) == adapter.session_owned_realized_pnl
+            ) and ledger_valid,
+            "fee_attribution_reconciled": bool(
+                adapter.state
+                and Decimal(ledger.get("fees_usdt", "NaN")) == adapter.session_owned_fees_usdt
+            ) and ledger_valid,
+            "fifo_attribution_reconciled": ledger.get("normal_fifo_round_trips") == adapter.session_fifo_round_trips and ledger_valid,
+            "normal_path_post_only_enforced": audited_exchange.normal_orders_created >= session_normal_creates,
+            "ledger_replay": ledger,
         }
         session_audit_records.append(session_audit)
         write_json_atomic(run_dir / f"{slot_label.lower()}_session_audit.json", session_audit)
@@ -642,19 +892,26 @@ def execute_r2_stage_c(
         "02_candidate_fingerprint_intact": candidate_fp == EXPECTED_CANDIDATE_FINGERPRINT,
         "03_terminal_position_flat_all_sessions": all(s["terminal_position_btc"] == 0.0 for s in session_audit_records),
         "04_terminal_owned_orders_zero_all_sessions": all(s["terminal_open_orders"] == 0 for s in session_audit_records),
-        "05_unknown_fills_zero_all_sessions": True,
-        "06_unclassified_events_zero": True,
-        "07_mutation_ambiguity_zero": True,
-        "08_unresolved_flatten_zero": True,
-        "09_inventory_cap_breaches_zero": True,
-        "10_owned_order_count_breaches_zero": True,
+        "05_unknown_fills_zero_all_sessions": all(s["foreign_fills_observed"] == 0 for s in session_audit_records),
+        "06_unclassified_events_zero": all(s["unclassified_events_zero"] for s in session_audit_records),
+        "07_mutation_ambiguity_zero": all(s["mutation_ambiguity_zero"] for s in session_audit_records),
+        "08_unresolved_flatten_zero": all(s["unresolved_flatten_zero"] for s in session_audit_records),
+        "09_inventory_cap_breaches_zero": all(s["inventory_cap_respected"] for s in session_audit_records),
+        "10_owned_order_count_breaches_zero": all(s["owned_order_cap_respected"] for s in session_audit_records),
         "11_normal_create_budget_breaches_zero": aggregate_normal_creates <= 60 * len(target_schedule) and all(s["normal_creates"] <= 60 for s in session_audit_records),
-        "12_normal_path_post_only_enforced": True,
+        "12_normal_path_post_only_enforced": all(s["normal_path_post_only_enforced"] for s in session_audit_records),
         "13_special_flatten_ceiling_adhered": sum(s["routine_cleanup_count"] + s["emergency_flatten_count"] for s in session_audit_records) <= 2,
         "14_loss_guards_respected": cumulative_realized_pnl >= Decimal("-75.00"),
-        "15_exact_accounting_reconciled_all_sessions": True,
+        "15_exact_accounting_reconciled_all_sessions": all(
+            s["exact_accounting_reconciled"] and s["fee_attribution_reconciled"] and s["fifo_attribution_reconciled"]
+            for s in session_audit_records
+        ),
         "16_clock_skew_and_book_safety_respected": all(s["admission_audit"]["clock_skew_ms"] <= 1500 for s in session_audit_records),
-        "17_zero_mutation_retries_and_live_denial": audited_exchange.live_endpoint_attempts == 0 and len(audited_exchange.intercepted_mutations) == 0,
+        "17_zero_mutation_retries_and_live_denial": (
+            audited_exchange.live_endpoint_attempts == 0
+            and len(audited_exchange.intercepted_mutations) == 0
+            and audited_exchange.mutation_retry_attempts == 0
+        ),
     }
 
     checkpoint_passed = all(checkpoint_checks.values())
@@ -713,7 +970,7 @@ def execute_r2_stage_c(
         "hard_drawdown_limit_usdt": "37.50",
         "live_endpoints_called": audited_exchange.live_endpoint_attempts,
         "modeled_capital_usdt": 750.0,
-        "mutation_retries_attempted": 0,
+        "mutation_retries_attempted": audited_exchange.mutation_retry_attempts,
         "normal_creates_budget_session": 60,
         "normal_creates_budget_stage_c": 180,
         "normal_lot_size_btc": 0.01,
@@ -732,6 +989,7 @@ def execute_r2_stage_c(
         "q04_started": False,
         "run_id": run_id,
         "sessions_executed": len(target_schedule),
+        "session_ids": [str(slot["session_id"]) for slot in target_schedule],
         "slots_completed": ["Q01", "Q02", "Q03"],
         "timestamp_utc": stamp,
     }
@@ -746,6 +1004,7 @@ def execute_r2_stage_c(
     terminal_marker = {
         "account_mutations": 0,
         "behavioral_parameter_drift": 0,
+        "campaign_id": campaign_id,
         "candidate_fingerprint": candidate_fp,
         "completion_hashes_sha256": hashes_sha256,
         "files_verified": len(completion_hashes),
@@ -765,12 +1024,16 @@ def execute_r2_stage_c(
         "r1_run_id": r1_run_id,
         "r2_canary_run_id": r2_canary_run_id,
         "r2_stage_c_preparation_ref": stage_c_prep_ref,
+        "interruption_guard_superseded_by_terminal": True,
+        "session_ids": [str(slot["session_id"]) for slot in target_schedule],
         "sessions_executed": len(target_schedule),
         "stage_c_execution_complete": True,
         "status": checkpoint_status,
         "timestamp_utc": stamp,
     }
     write_json_atomic(run_dir / "R2_STAGE_C_EXECUTION_COMPLETED.json", terminal_marker)
+    atexit.unregister(latch_unhandled_exit)
+    sys.excepthook = original_excepthook
 
     print(f"\n=== Stage C Three-Session Checkpoint Execution Complete ===")
     print(f"Status: {checkpoint_status}")

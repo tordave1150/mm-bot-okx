@@ -21,7 +21,9 @@ tests/ and backtest/tests/
   └─ deterministic regression and permitted offline coverage
 ```
 
-This is the only stack to use for R0 work. It is demo-oriented, fail-closed, and governed by `AGENTS.md`.
+This is the only stack to use for R0 work. It is Demo-oriented and fail-closed.
+The applicable explicitly authorized package and its durable evidence define
+the active execution boundary; this checkout has no `AGENTS.md` file.
 
 ## Shared modules
 
@@ -40,9 +42,10 @@ strategy.py -> Lumibot lifecycle
 
 | Phase | State |
 |---|---|
-| R0 offline repair | Active and offline-only |
+| R0 offline repair | Permitted only when explicitly authorized |
 | R1 read-only demo preflight | Requires fresh identities and exact authorization |
-| R2 economic campaign | Requires passing R1 and separate authorization |
+| R2 economic campaign | Requires passing R1, fresh identities, and separate authorization |
 | Production | Unauthorized |
 
-The immutable predecessor evidence package remains outside all cleanup and refactoring work.
+For the latest closed campaign state, see `CURRENT_STATUS.md`. The immutable
+predecessor evidence package remains outside all cleanup and refactoring work.

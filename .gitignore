@@ -10,10 +10,6 @@ dist/
 build/
 *.egg
 
-# State persistence
-state/
-bot_state.json
-
 # IDE
 .vscode/
 .idea/
@@ -24,11 +20,8 @@ bot_state.json
 Thumbs.db
 .DS_Store
 
-# Logs & Virtualenv
-bot.log
+# Virtualenv & Artifacts
 myenv/
-bot_error.log
-bot_state.json.corrupt
 artifacts/
 
 # Testing & Temporary Caches

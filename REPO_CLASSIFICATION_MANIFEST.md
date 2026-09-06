@@ -4,13 +4,16 @@ This manifest is for review and cleanup planning. It does not authorize deletion
 
 ## Core: retain in active paths
 
-- `AGENTS.md`
-- `AGENTS_OKX_DEMO_ECONOMIC_SAMPLE_EFFICIENCY_REPAIR.md`
 - `market_maker/` excluding `__pycache__/`
 - `okx_demo_*.py`, `okx_fill_restart_*.py`, and `okx_execution_safety.py`
 - `market_spec.py`, `fill_tracker.py`, `fill_classification.py`
 - `tests/`, `backtest/`, and `static/index.html`
 - immutable predecessor package `economic-package-20260818T125221Z`
+- `CURRENT_STATUS.md` and `REPO_CLEANUP_AUDIT_20260905.md`
+
+There is no active `AGENTS.md` file in this checkout. Execution authority comes
+from the applicable explicitly authorized package and the durable evidence it
+names, not from a missing repository-local instruction file.
 
 ## Legacy: retain until a deliberate migration is complete
 
@@ -18,7 +21,7 @@ This manifest is for review and cleanup planning. It does not authorize deletion
 - `strategy.py` (unimported Lumibot implementation)
 - `.lumibot/` (legacy Lumibot state)
 - `bot_state.json` (legacy async runtime state)
-- historical `AGENTS_*.md` protocol sources
+- historical protocol and planning Markdown documents
 
 Do not move legacy sources before updating dependent documentation, tests, source-hash manifests, and any explicit import/path references.
 

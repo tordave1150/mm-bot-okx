@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -12,7 +13,7 @@ from okx_demo_adapter import DemoAdapterError
 from okx_demo_staged_validation import compute_candidate_fingerprint
 
 ROOT = Path(__file__).resolve().parent
-EXPECTED_CANDIDATE_FINGERPRINT = "1d618d809a004001d6be5ad35f5865292b81c6cd4d7a7713f21bb6cde9636ccf"
+EXPECTED_CANDIDATE_FINGERPRINT = "ef993bc42ffbb19cf1bfc94d3dcca32cd19909c9b0d9da73ab0a01ab0088ffb8"
 
 
 def _hash(path: Path) -> str:
@@ -48,6 +49,48 @@ def _completion_hashes(directory: Path, terminal_name: str) -> dict[str, str]:
     }
 
 
+def _reject_unfinished_prior_stage_c_session(
+    *, root: Path, campaign_id: str, requested_session_id: str, slots: Mapping[str, Mapping[str, Any]]
+) -> None:
+    """A guarded Stage C identity is never reusable; incomplete evidence blocks successors."""
+    requested = slots.get(requested_session_id)
+    if requested is None:
+        return
+    requested_index = int(requested.get("slot_index", 0))
+    for guard_path in (root / "artifacts" / "r2_stage_c_execution").glob("*/R2_STAGE_C_INTERRUPTION_GUARD.json"):
+        try:
+            guard = json.loads(guard_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise DemoAdapterError("Stage C interruption guard is unreadable") from exc
+        guarded_sessions = guard.get("session_ids")
+        if guard.get("campaign_id") != campaign_id or not isinstance(guarded_sessions, list):
+            continue
+        guarded_indexes = [int(slots[s]["slot_index"]) for s in guarded_sessions if s in slots]
+        if not guarded_indexes:
+            continue
+        completed_path = guard_path.parent / "R2_STAGE_C_EXECUTION_COMPLETED.json"
+        failed_path = guard_path.parent / "R2_STAGE_C_EXECUTION_FAILED.json"
+        if requested_session_id in guarded_sessions:
+            raise DemoAdapterError("Prior Stage C session identity is consumed; reuse admission blocked")
+        if max(guarded_indexes) < requested_index and not completed_path.is_file():
+            raise DemoAdapterError("Prior Stage C session lacks terminal evidence; successor admission blocked")
+        if max(guarded_indexes) < requested_index and failed_path.is_file():
+            raise DemoAdapterError("Prior Stage C session has terminal failure evidence; successor admission blocked")
+        if max(guarded_indexes) < requested_index:
+            try:
+                completed = json.loads(completed_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise DemoAdapterError("Prior Stage C terminal evidence is unreadable") from exc
+            if any((
+                completed.get("status") != "R2_CURRENT_SINGLE_SESSION_TERMINAL_PASSED",
+                completed.get("campaign_id") != campaign_id,
+                completed.get("session_ids") != guarded_sessions,
+                completed.get("interruption_guard_superseded_by_terminal") is not True,
+            )):
+                raise DemoAdapterError("Prior Stage C terminal evidence is not admissible")
+            _verify_hashes(guard_path.parent)
+
+
 def verify_current_stage_c_predecessors(
     *,
     root: Path,
@@ -59,7 +102,8 @@ def verify_current_stage_c_predecessors(
     campaign_id: str,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], datetime]:
     """Return exactly s02/s03 only after the complete local chain passes."""
-    if compute_candidate_fingerprint(root)["candidate_fingerprint"] != EXPECTED_CANDIDATE_FINGERPRINT:
+    active_fingerprint = compute_candidate_fingerprint(root)["candidate_fingerprint"]
+    if active_fingerprint != EXPECTED_CANDIDATE_FINGERPRINT:
         raise DemoAdapterError("Candidate fingerprint drift detected")
 
     r1_dir = root / "artifacts" / "r1_read_only_preflight_runs" / r1_run_id
@@ -73,24 +117,55 @@ def verify_current_stage_c_predecessors(
     r2 = json.loads((r2_dir / "R2_PREPARATION_COMPLETED.json").read_text(encoding="utf-8"))
     final = json.loads((final_dir / "R2_FINAL_PREPARATION_COMPLETED.json").read_text(encoding="utf-8"))
     canary = json.loads((canary_dir / "R2_CANARY_EXECUTION_COMPLETED.json").read_text(encoding="utf-8"))
-    if r1.get("status") != "R1_PREFLIGHT_PASSED" or r1.get("r0_evidence_id") != r0_evidence_id:
+    if any((
+        r1.get("status") != "R1_PREFLIGHT_PASSED",
+        r1.get("r0_evidence_id") != r0_evidence_id,
+        r1.get("candidate_fingerprint") != active_fingerprint,
+        r1.get("create_attempts") != 0,
+        r1.get("cancel_attempts") != 0,
+        r1.get("flatten_attempts") != 0,
+        r1.get("account_mutation_attempts") != 0,
+        r1.get("live_endpoint_attempts") != 0,
+    )):
         raise DemoAdapterError("R1 predecessor admission failed")
-    if r2.get("status") != "R2_PREPARED_AWAITING_EXPLICIT_AUTHORIZATION":
+    if any((
+        r2.get("status") != "R2_PREPARED_AWAITING_EXPLICIT_AUTHORIZATION",
+        r2.get("candidate_fingerprint") != active_fingerprint,
+        r2.get("credential_reads") != 0,
+        r2.get("network_attempts") != 0,
+        r2.get("create_attempts") != 0,
+        r2.get("cancel_attempts") != 0,
+        r2.get("flatten_attempts") != 0,
+    )):
         raise DemoAdapterError("R2 preparation is not eligible")
     if (r2.get("r0_evidence_id") != r0_evidence_id or r2.get("r1_run_id") != r1_run_id
             or r2.get("r2_campaign_id") != campaign_id):
         raise DemoAdapterError("R2 preparation identity mismatch")
-    if (final.get("status") != "R2_FINAL_PREPARATION_PASSED"
-            or final.get("r0_evidence_id") != r0_evidence_id
-            or final.get("r1_run_id") != r1_run_id
-            or final.get("r2_prep_ref") != r2_prep_ref):
+    if any((
+        final.get("status") != "R2_FINAL_PREPARATION_PASSED",
+        final.get("r0_evidence_id") != r0_evidence_id,
+        final.get("r1_run_id") != r1_run_id,
+        final.get("r2_prep_ref") != r2_prep_ref,
+        final.get("candidate_fingerprint") != active_fingerprint,
+        final.get("orders_created") != 0,
+        final.get("orders_cancelled") != 0,
+        final.get("flatten_attempts") != 0,
+        final.get("account_mutations") != 0,
+        final.get("live_endpoint_attempts") != 0,
+    )):
         raise DemoAdapterError("Final-admission predecessor identity mismatch")
-    if (canary.get("status") != "R2_CANARY_PASSED"
-            or canary.get("canary_hard_checkpoint_passed") is not True
-            or canary.get("r2_final_prep_ref") != final_prep_ref
-            or canary.get("r2_prep_ref") != r2_prep_ref
-            or canary.get("r1_run_id") != r1_run_id
-            or canary.get("r0_evidence_id") != r0_evidence_id):
+    if any((
+        canary.get("status") != "R2_CANARY_PASSED",
+        canary.get("canary_hard_checkpoint_passed") is not True,
+        canary.get("r2_final_prep_ref") != final_prep_ref,
+        canary.get("r2_prep_ref") != r2_prep_ref,
+        canary.get("r1_run_id") != r1_run_id,
+        canary.get("r0_evidence_id") != r0_evidence_id,
+        canary.get("candidate_fingerprint") != active_fingerprint,
+        canary.get("session_2_started") is not False,
+        canary.get("account_mutations") != 0,
+        canary.get("live_endpoint_attempts") != 0,
+    )):
         raise DemoAdapterError("Canary checkpoint predecessor admission failed")
 
     identity = json.loads((r2_dir / "r2_identity.json").read_text(encoding="utf-8"))
@@ -194,6 +269,9 @@ def admit_current_stage_c_execution(
     slot = slots.get(session_id)
     if slot is None or slot.get("expected_session_arm_token") != arm_token:
         raise DemoAdapterError("Current Stage C session or arm token mismatch")
+    _reject_unfinished_prior_stage_c_session(
+        root=root, campaign_id=campaign_id, requested_session_id=session_id, slots=slots,
+    )
     at = now or datetime.now(timezone.utc)
     if at.tzinfo is None:
         raise DemoAdapterError("Current Stage C admission requires an aware UTC timestamp")
@@ -211,6 +289,7 @@ def execute_current_stage_c_session(
     campaign_id: str,
     session_id: str,
     arm_token: str,
+    admission_now: datetime | None = None,
     stamp: str | None = None,
     execution_stage: str = "ECONOMIC_QUALIFICATION",
     exchange: Any | None = None,
@@ -226,7 +305,7 @@ def execute_current_stage_c_session(
     """Execute one separately authorized current Stage C slot after local admission."""
     slot = admit_current_stage_c_execution(
         root=root, continuation_prep_ref=continuation_prep_ref, campaign_id=campaign_id,
-        session_id=session_id, arm_token=arm_token,
+        session_id=session_id, arm_token=arm_token, now=admission_now,
     )
     terminal = json.loads((root / "artifacts" / "r2_current_stage_c_preparation" / continuation_prep_ref /
                            "R2_CURRENT_STAGE_C_PREPARATION_COMPLETED.json").read_text(encoding="utf-8"))
@@ -234,14 +313,46 @@ def execute_current_stage_c_session(
     execution_slot["qualification_slot"] = execution_slot["slot_name"].upper()
     execution_slot["nonce"] = session_id.rsplit(":p0:", 1)[-1]
     execution_slot["expected_arm_token"] = arm_token
-    from okx_demo_r2_stage_c_executor import execute_r2_stage_c
-    return execute_r2_stage_c(
-        root=root, stamp=stamp, campaign_id=campaign_id,
-        execution_scope="R2_CURRENT_STAGE_C_SINGLE_SESSION", slot_schedule=[execution_slot],
-        r0_closure_ref=terminal["r0_evidence_id"], r1_run_id=terminal["r1_run_id"],
-        r2_canary_run_id=terminal["canary_run_id"], stage_c_prep_ref=continuation_prep_ref,
-        execution_stage=execution_stage, exchange=exchange, api_key=api_key,
-        api_secret=api_secret, passphrase=passphrase, load_env_file=load_env_file,
-        warmup_ticks=warmup_ticks, cycles_per_session=cycles_per_session,
-        tick_interval_s=tick_interval_s, resting_s=resting_s,
+    # Deterministic fixtures may inject an in-memory exchange. Real execution
+    # must instead use a separate child worker so this parent can durably record
+    # an abrupt worker exit without relying on the child's atexit hooks.
+    if exchange is not None:
+        from okx_demo_r2_stage_c_executor import execute_r2_stage_c
+        return execute_r2_stage_c(
+            root=root, stamp=stamp, campaign_id=campaign_id,
+            execution_scope="R2_CURRENT_STAGE_C_SINGLE_SESSION", slot_schedule=[execution_slot],
+            r0_closure_ref=terminal["r0_evidence_id"], r1_run_id=terminal["r1_run_id"],
+            r2_canary_run_id=terminal["canary_run_id"], stage_c_prep_ref=continuation_prep_ref,
+            execution_stage=execution_stage, exchange=exchange, api_key=api_key,
+            api_secret=api_secret, passphrase=passphrase, load_env_file=load_env_file,
+            warmup_ticks=warmup_ticks, cycles_per_session=cycles_per_session,
+            tick_interval_s=tick_interval_s, resting_s=resting_s,
+        )
+
+    if any(value is not None for value in (api_key, api_secret, passphrase)):
+        raise DemoAdapterError("Real Stage C worker reads credentials only inside its supervised child process")
+    if cycles_per_session is not None and execution_stage == "ECONOMIC_QUALIFICATION":
+        raise DemoAdapterError("Canonical economic qualification forbids a fixed cycle override")
+
+    run_stamp = stamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_dir = root / "artifacts" / "r2_stage_c_execution" / f"r2-stage-c-run-{run_stamp}"
+    if run_dir.exists():
+        raise DemoAdapterError("Stage C run identity already exists")
+    command = [
+        sys.executable, str(root / "okx_demo_r2_stage_c_worker.py"),
+        "--root", str(root), "--stamp", run_stamp, "--campaign-id", campaign_id,
+        "--r0-evidence-id", str(terminal["r0_evidence_id"]), "--r1-run-id", str(terminal["r1_run_id"]),
+        "--canary-run-id", str(terminal["canary_run_id"]), "--stage-c-prep-ref", continuation_prep_ref,
+        "--execution-stage", execution_stage, "--slot-json", json.dumps(execution_slot, sort_keys=True),
+        "--warmup-ticks", str(warmup_ticks), "--tick-interval-s", str(tick_interval_s),
+        "--resting-s", str(resting_s),
+    ]
+    from okx_demo_r2_stage_c_supervisor import supervise_worker
+    exit_code = supervise_worker(
+        run_dir=run_dir, command=command, campaign_id=campaign_id, session_id=session_id,
     )
+    failed = run_dir / "R2_STAGE_C_EXECUTION_FAILED.json"
+    completed = run_dir / "R2_STAGE_C_EXECUTION_COMPLETED.json"
+    if exit_code != 0 or failed.is_file() or not completed.is_file():
+        raise DemoAdapterError("Supervised Stage C worker ended without admissible terminal success")
+    return run_dir

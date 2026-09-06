@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parent
 
 CANONICAL_R0_CLOSURE_REF = "r0-closure-20260904T121733Z"
 CANONICAL_R1_RUN_ID = "r1-preflight-run-20260904T121733Z"
-EXPECTED_CANDIDATE_FINGERPRINT = "1d618d809a004001d6be5ad35f5865292b81c6cd4d7a7713f21bb6cde9636ccf"
+EXPECTED_CANDIDATE_FINGERPRINT = "ef993bc42ffbb19cf1bfc94d3dcca32cd19909c9b0d9da73ab0a01ab0088ffb8"
 
 
 def canonical_sha256(content: bytes | str) -> str:
@@ -43,6 +43,83 @@ def canonical_sha256(content: bytes | str) -> str:
 
 def hash_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _is_exact_fresh_r0_readiness_evidence(r0_data: Mapping[str, Any]) -> bool:
+    """Accept a fresh repair only when every safety field is present and exact."""
+    # A repair evidence record is admissible only when it binds a concrete
+    # repaired predecessor and proves that the repair itself made no external
+    # calls. The successor's R1 marker is separately required below to refer
+    # to this exact evidence ID; never use the historical run named inside a
+    # repair record as an implicit successor authorization.
+    offline_repair = r0_data.get("offline_verification")
+    repair_results = r0_data.get("repair_results")
+    repair_boundaries = r0_data.get("boundaries")
+    if isinstance(offline_repair, Mapping) and isinstance(repair_results, Mapping) and isinstance(repair_boundaries, Mapping):
+        required_repair_zeros = (
+            "credentials_read", "network_attempts", "orders_or_mutations",
+            "mutation_retries", "live_endpoint_attempts",
+        )
+        return (
+            r0_data.get("status") == "R0_OFFLINE_REPAIR_PASSED"
+            and r0_data.get("decision") == "FRESH_R1_PREPARATION_ELIGIBLE_PENDING_EXPLICIT_AUTHORIZATION"
+            and isinstance(r0_data.get("repaired_r0_evidence_id"), str)
+            and bool(r0_data.get("repaired_r0_evidence_id"))
+            and isinstance(r0_data.get("candidate_fingerprint"), str)
+            and len(str(r0_data.get("candidate_fingerprint"))) == 64
+            and repair_results.get("accepts_exact_post_clearance_zero_zero_schema") is True
+            and repair_results.get("rejects_missing_or_nonzero_clearance_fields") is True
+            and repair_results.get("rejects_stale_r1_candidate_fingerprint") is True
+            and all(offline_repair.get(field) == 0 for field in required_repair_zeros)
+            and repair_boundaries.get("r1_prepared") is False
+            and repair_boundaries.get("r2_prepared") is False
+            and repair_boundaries.get("r2_executed") is False
+            and repair_boundaries.get("r3_prepared_or_run") is False
+            and repair_boundaries.get("live_or_production") is False
+        )
+
+    # Post-clearance evidence is deliberately a separate schema: it records a
+    # read-only external 0/0 admission result, while its own offline boundary
+    # proves that the R0 evidence-writing phase made no remote calls.
+    clearance = r0_data.get("clearance_observation")
+    boundary = r0_data.get("offline_boundary")
+    failed_identity = r0_data.get("failed_identity_disposition")
+    if isinstance(clearance, Mapping) and isinstance(boundary, Mapping) and isinstance(failed_identity, Mapping):
+        required_boundary_zeros = (
+            "credentials_read", "network_attempts", "orders_or_mutations",
+            "mutation_retries", "live_endpoint_attempts",
+        )
+        return (
+            r0_data.get("status") == "R0_OFFLINE_READINESS_PASSED"
+            and r0_data.get("decision") == "FRESH_R1_PREPARATION_ELIGIBLE_PENDING_EXPLICIT_AUTHORIZATION"
+            and clearance.get("execution_mode") == "OKX_DEMO"
+            and clearance.get("instrument") == "BTC-USDT-SWAP"
+            and clearance.get("nonzero_position_count") == 0
+            and clearance.get("open_order_count") == 0
+            and clearance.get("clearance_passed") is True
+            and all(boundary.get(field) == 0 for field in required_boundary_zeros)
+            and boundary.get("r1_prepared_or_run") is False
+            and boundary.get("r2_or_r3_prepared_or_run") is False
+            and failed_identity.get("reuse_authorized") is False
+            and failed_identity.get("retry_authorized") is False
+            and failed_identity.get("resume_authorized") is False
+        )
+
+    offline = r0_data.get("offline_verification")
+    boundaries = r0_data.get("boundaries")
+    if not isinstance(offline, Mapping) or not isinstance(boundaries, Mapping):
+        return False
+    zero_fields = ("orders_created", "orders_cancelled", "flatten_attempts", "mutation_retries")
+    return (
+        r0_data.get("status") in {"R0_OFFLINE_FRESH_CHAIN_READINESS_PASSED", "R0_OFFLINE_REPAIR_PASSED"}
+        and r0_data.get("decision") == "FRESH_R1_PREPARATION_ELIGIBLE_PENDING_EXPLICIT_AUTHORIZATION"
+        and offline.get("network_access") is False
+        and offline.get("order_mutations") == 0
+        and all(offline.get(field) == 0 for field in zero_fields)
+        and boundaries.get("r1_prepared") is False
+        and boundaries.get("r2_prepared") is False
+        and boundaries.get("r2_executed") is False
+    )
 
 
 def write_json_atomic(target: Path, payload: Mapping[str, Any]) -> None:
@@ -97,14 +174,22 @@ def build_r2_campaign_preparation_package(
     if not r0_marker.is_file():
         raise FileNotFoundError(f"Prerequisite R0 closure marker missing: {r0_marker}")
     r0_data = json.loads(r0_marker.read_text(encoding="utf-8"))
-    recorded_r0_ref = r0_data.get("closure_package_id") or r0_data.get("audit_id") or r0_data.get("repair_id")
+    recorded_r0_ref = (
+        r0_data.get("closure_package_id")
+        or r0_data.get("audit_id")
+        or r0_data.get("repair_id")
+        or r0_data.get("evidence_id")
+    )
     if recorded_r0_ref != expected_r0_ref:
         raise ValueError("R0 evidence identity mismatch")
     if r0_evidence_dir is None:
         if r0_data.get("status") != "R0_OFFLINE_QUALIFICATION_PASSED":
             raise ValueError(f"R0 closure status invalid: {r0_data.get('status')}")
-    elif r0_data.get("decision") != "R2_CAMPAIGN_EXPIRED_NOT_READY":
-        raise ValueError("Fresh R0 diagnostic decision is not eligible for successor preparation")
+    else:
+        is_legacy_expiry_audit = r0_data.get("decision") == "R2_CAMPAIGN_EXPIRED_NOT_READY"
+        is_fresh_readiness_evidence = _is_exact_fresh_r0_readiness_evidence(r0_data)
+        if not (is_legacy_expiry_audit or is_fresh_readiness_evidence):
+            raise ValueError("Fresh R0 evidence is not eligible for successor preparation")
 
     # 3. Verify R1 preflight prerequisite
     r1_run_dir = root / "artifacts" / "r1_read_only_preflight_runs" / r1_run_id

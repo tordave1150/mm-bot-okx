@@ -271,6 +271,10 @@ def test_canary_execution_passes_cleanly() -> None:
         assert chk1["checkpoint_decision"] == "PASS"
         assert chk1["passed_count"] == 17
         assert len(chk1["failed_checks"]) == 0
+        evidence = json.loads((run_dir / "hard_checkpoint_1_evidence.json").read_text(encoding="utf-8"))
+        assert evidence["local_state_reconciled"] is True
+        assert evidence["complete_fill_attribution"] is True
+        assert evidence["mutation_retry_attempts"] == 0
 
         # Verify endpoint audit: zero account mutations
         endpoints = json.loads((run_dir / "endpoint_audit.json").read_text(encoding="utf-8"))
@@ -295,6 +299,15 @@ def test_canary_execution_passes_cleanly() -> None:
     finally:
         if target_dir.exists():
             shutil.rmtree(target_dir, ignore_errors=True)
+
+
+def test_wrapper_rejects_duplicate_mutation_identity_as_retry() -> None:
+    wrapper = AuditedCanaryExchangeWrapper(PreflightMockExchange())
+    params = {"postOnly": True, "clOrdId": "retry-proof-client-id"}
+    wrapper.create_order("BTC/USDT:USDT", "limit", "buy", 1.0, 49000.0, params)
+    with pytest.raises(DemoAdapterError, match="duplicate or missing create identity"):
+        wrapper.create_order("BTC/USDT:USDT", "limit", "buy", 1.0, 49000.0, params)
+    assert wrapper.mutation_retry_attempts == 1
 
 
 def test_final_admission_rejects_mismatched_session_before_exchange_access() -> None:
